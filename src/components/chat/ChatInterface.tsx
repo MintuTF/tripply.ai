@@ -176,7 +176,7 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
             </div>
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-accent-foreground to-secondary bg-clip-text text-transparent">
-                Voyagr
+                Tripply
               </h1>
               <p className="text-xs text-muted-foreground font-medium">
                 AI Travel Research Assistant

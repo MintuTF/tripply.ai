@@ -118,7 +118,7 @@ export default function TripPage({ params }: PageProps) {
               <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-accent-foreground bg-clip-text text-transparent">Voyagr</h1>
+              <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-accent-foreground bg-clip-text text-transparent">Tripply</h1>
               <p className="text-sm text-muted-foreground font-medium">Paris Trip 2025</p>
             </div>
           </div>

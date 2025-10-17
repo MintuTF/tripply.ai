@@ -1,8 +1,8 @@
-# 🌍 Voyagr - AI Travel Research Assistant
+# 🌍 Tripply - AI Travel Research Assistant
 
 <div align="center">
 
-![Voyagr](https://img.shields.io/badge/Voyagr-AI%20Travel%20Assistant-blue?style=for-the-badge)
+![Tripply](https://img.shields.io/badge/Tripply-AI%20Travel%20Assistant-blue?style=for-the-badge)
 ![Next.js](https://img.shields.io/badge/Next.js-15.5.5-black?style=for-the-badge&logo=next.js)
 ![React](https://img.shields.io/badge/React-19.1.0-blue?style=for-the-badge&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)
@@ -167,8 +167,8 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/voyagr-app.git
-   cd voyagr-app
+   git clone https://github.com/your-username/tripply-ai.git
+   cd tripply-ai
    ```
 
 2. **Install dependencies**
@@ -243,7 +243,7 @@
 ## 📁 Project Structure
 
 ```
-voyagr-app/
+tripply-ai/
 ├── src/
 │   ├── app/                          # Next.js App Router
 │   │   ├── api/
@@ -370,7 +370,7 @@ See `.env.example` for complete list with descriptions.
    git init
    git add .
    git commit -m "Initial commit"
-   git remote add origin https://github.com/your-username/voyagr-app.git
+   git remote add origin https://github.com/your-username/tripply-ai.git
    git push -u origin main
    ```
 
@@ -414,13 +414,13 @@ PORT=3001 npm start
 
 ```bash
 # Build image
-docker build -t voyagr-app .
+docker build -t tripply-ai .
 
 # Run container
 docker run -p 3000:3000 \
   -e OPENAI_API_KEY=your-key \
   -e GOOGLE_PLACES_API_KEY=your-key \
-  voyagr-app
+  tripply-ai
 
 # Or use docker-compose
 docker-compose up
@@ -522,8 +522,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - **Documentation:** [DEPLOYMENT.md](./DEPLOYMENT.md)
-- **Issues:** [GitHub Issues](https://github.com/your-username/voyagr-app/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/your-username/voyagr-app/discussions)
+- **Issues:** [GitHub Issues](https://github.com/your-username/tripply-ai/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/your-username/tripply-ai/discussions)
 
 ---
 
@@ -531,6 +531,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Built with ❤️ for travelers worldwide**
 
-[⬆ Back to Top](#-voyagr---ai-travel-research-assistant)
+[⬆ Back to Top](#-tripply---ai-travel-research-assistant)
 
 </div>

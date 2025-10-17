@@ -1,12 +1,12 @@
-# Voyagr Project Structure
+# Tripply Project Structure
 
 ## Overview
-This document outlines the structure and organization of the Voyagr codebase.
+This document outlines the structure and organization of the Tripply codebase.
 
 ## Directory Structure
 
 ```
-voyagr-app/
+tripply-ai/
 ├── src/
 │   ├── app/                      # Next.js App Router
 │   │   ├── api/                  # API Routes

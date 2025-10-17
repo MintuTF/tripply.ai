@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  voyagr:
+  tripply:
     build:
       context: .
       dockerfile: Dockerfile

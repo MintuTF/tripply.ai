@@ -19,7 +19,7 @@ interface LayoutRendererProps {
 
 /**
  * LayoutRenderer - Dynamically renders the appropriate layout based on detected intent
- * This is the core of Voyagr's adaptive UI system
+ * This is the core of Tripply's adaptive UI system
  */
 export function LayoutRenderer({
   intent,

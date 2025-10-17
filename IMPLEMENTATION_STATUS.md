@@ -1,4 +1,4 @@
-# Voyagr Implementation Status
+# Tripply Implementation Status
 
 Last Updated: October 14, 2025
 
@@ -279,7 +279,7 @@ Last Updated: October 14, 2025
 ## 📁 File Structure
 
 ```
-voyagr-app/
+tripply-ai/
 ├── src/
 │   ├── app/
 │   │   ├── api/
@@ -322,7 +322,7 @@ voyagr-app/
 
 ### 1. Setup
 ```bash
-cd voyagr-app
+cd tripply-ai
 npm install
 cp .env.example .env.local
 # Add your API keys to .env.local

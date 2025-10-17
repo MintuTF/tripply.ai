@@ -1,6 +1,6 @@
-# 🚀 Voyagr - Production Deployment Guide
+# 🚀 Tripply - Production Deployment Guide
 
-Complete guide for deploying Voyagr to production.
+Complete guide for deploying Tripply to production.
 
 ## 📋 Prerequisites
 
@@ -159,7 +159,7 @@ Visit `http://localhost:3000` and test:
 
 2. **Build Docker Image**
    ```bash
-   docker build -t voyagr-app .
+   docker build -t tripply-ai .
    ```
 
 3. **Run Container**
@@ -168,7 +168,7 @@ Visit `http://localhost:3000` and test:
      -e OPENAI_API_KEY=sk-proj-... \
      -e GOOGLE_PLACES_API_KEY=AIzaSy... \
      -e NEXT_PUBLIC_APP_URL=https://your-domain.com \
-     voyagr-app
+     tripply-ai
    ```
 
 ---
@@ -188,8 +188,8 @@ Visit `http://localhost:3000` and test:
 
 3. **Clone Repository**
    ```bash
-   git clone https://github.com/your-username/voyagr-app.git
-   cd voyagr-app
+   git clone https://github.com/your-username/tripply-ai.git
+   cd tripply-ai
    ```
 
 4. **Install Dependencies**
@@ -211,7 +211,7 @@ Visit `http://localhost:3000` and test:
 7. **Run with PM2** (Process Manager)
    ```bash
    npm install -g pm2
-   pm2 start npm --name "voyagr" -- start
+   pm2 start npm --name "tripply" -- start
    pm2 save
    pm2 startup
    ```
@@ -363,9 +363,9 @@ jobs:
 
 ## 📞 Support
 
-- Documentation: https://docs.voyagr.app
-- Issues: https://github.com/your-username/voyagr-app/issues
-- Email: support@voyagr.app
+- Documentation: https://docs.tripply.app
+- Issues: https://github.com/your-username/tripply-ai/issues
+- Email: support@tripply.app
 
 ---
 

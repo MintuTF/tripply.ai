@@ -8,8 +8,8 @@ export const openai = new OpenAI({
 // Default model for chat completions
 export const DEFAULT_MODEL = 'gpt-4-turbo-preview';
 
-// System prompt for Voyagr
-export const SYSTEM_PROMPT = `You are Voyagr, an AI travel research assistant. Your role is to help users plan their trips by:
+// System prompt for Tripply
+export const SYSTEM_PROMPT = `You are Tripply, an AI travel research assistant. Your role is to help users plan their trips by:
 
 1. **Researching destinations** - Provide accurate, up-to-date information about travel destinations
 2. **Finding accommodations** - Search for and compare hotels, hostels, and vacation rentals
