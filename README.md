@@ -167,8 +167,8 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/tripply-ai.git
-   cd tripply-ai
+   git clone https://github.com/your-username/tripply.ai.git
+   cd tripply.ai
    ```
 
 2. **Install dependencies**
@@ -243,7 +243,7 @@
 ## 📁 Project Structure
 
 ```
-tripply-ai/
+tripply.ai/
 ├── src/
 │   ├── app/                          # Next.js App Router
 │   │   ├── api/
@@ -370,7 +370,7 @@ See `.env.example` for complete list with descriptions.
    git init
    git add .
    git commit -m "Initial commit"
-   git remote add origin https://github.com/your-username/tripply-ai.git
+   git remote add origin https://github.com/your-username/tripply.ai.git
    git push -u origin main
    ```
 
@@ -414,13 +414,13 @@ PORT=3001 npm start
 
 ```bash
 # Build image
-docker build -t tripply-ai .
+docker build -t tripply.ai .
 
 # Run container
 docker run -p 3000:3000 \
   -e OPENAI_API_KEY=your-key \
   -e GOOGLE_PLACES_API_KEY=your-key \
-  tripply-ai
+  tripply.ai
 
 # Or use docker-compose
 docker-compose up
@@ -522,8 +522,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - **Documentation:** [DEPLOYMENT.md](./DEPLOYMENT.md)
-- **Issues:** [GitHub Issues](https://github.com/your-username/tripply-ai/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/your-username/tripply-ai/discussions)
+- **Issues:** [GitHub Issues](https://github.com/your-username/tripply.ai/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/your-username/tripply.ai/discussions)
 
 ---
 

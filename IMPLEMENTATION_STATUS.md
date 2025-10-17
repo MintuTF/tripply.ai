@@ -279,7 +279,7 @@ Last Updated: October 14, 2025
 ## 📁 File Structure
 
 ```
-tripply-ai/
+tripply.ai/
 ├── src/
 │   ├── app/
 │   │   ├── api/
@@ -322,7 +322,7 @@ tripply-ai/
 
 ### 1. Setup
 ```bash
-cd tripply-ai
+cd tripply.ai
 npm install
 cp .env.example .env.local
 # Add your API keys to .env.local

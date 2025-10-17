@@ -6,7 +6,7 @@ This document outlines the structure and organization of the Tripply codebase.
 ## Directory Structure
 
 ```
-tripply-ai/
+tripply.ai/
 ├── src/
 │   ├── app/                      # Next.js App Router
 │   │   ├── api/                  # API Routes

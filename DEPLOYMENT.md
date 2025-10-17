@@ -159,7 +159,7 @@ Visit `http://localhost:3000` and test:
 
 2. **Build Docker Image**
    ```bash
-   docker build -t tripply-ai .
+   docker build -t tripply.ai .
    ```
 
 3. **Run Container**
@@ -168,7 +168,7 @@ Visit `http://localhost:3000` and test:
      -e OPENAI_API_KEY=sk-proj-... \
      -e GOOGLE_PLACES_API_KEY=AIzaSy... \
      -e NEXT_PUBLIC_APP_URL=https://your-domain.com \
-     tripply-ai
+     tripply.ai
    ```
 
 ---
@@ -188,8 +188,8 @@ Visit `http://localhost:3000` and test:
 
 3. **Clone Repository**
    ```bash
-   git clone https://github.com/your-username/tripply-ai.git
-   cd tripply-ai
+   git clone https://github.com/your-username/tripply.ai.git
+   cd tripply.ai
    ```
 
 4. **Install Dependencies**
@@ -364,7 +364,7 @@ jobs:
 ## 📞 Support
 
 - Documentation: https://docs.tripply.app
-- Issues: https://github.com/your-username/tripply-ai/issues
+- Issues: https://github.com/your-username/tripply.ai/issues
 - Email: support@tripply.app
 
 ---
