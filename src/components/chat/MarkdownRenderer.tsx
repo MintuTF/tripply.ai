@@ -1,0 +1,207 @@
+'use client';
+
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import { cn } from '@/lib/utils';
+import { ExternalLink, MapPin, Clock, DollarSign, Star, Calendar, Utensils, Hotel, Plane } from 'lucide-react';
+
+interface MarkdownRendererProps {
+  content: string;
+  className?: string;
+}
+
+export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+  return (
+    <div className={cn('markdown-content', className)}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        components={{
+        // Headers with gradient styling and emojis
+        h1: ({ children }) => (
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary via-accent-foreground to-secondary bg-clip-text text-transparent mb-6 mt-8 first:mt-0 flex items-center gap-3">
+            <span className="text-4xl">✨</span>
+            {children}
+          </h1>
+        ),
+        h2: ({ children }) => (
+          <h2 className="text-2xl font-bold text-foreground mb-4 mt-6 first:mt-0 flex items-center gap-2 border-l-4 border-primary pl-4">
+            <span className="text-2xl">📍</span>
+            {children}
+          </h2>
+        ),
+        h3: ({ children }) => (
+          <h3 className="text-xl font-semibold text-foreground/90 mb-3 mt-5 first:mt-0 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-primary" />
+            {children}
+          </h3>
+        ),
+        h4: ({ children }) => (
+          <h4 className="text-lg font-semibold text-foreground/80 mb-2 mt-4 first:mt-0">
+            {children}
+          </h4>
+        ),
+
+        // Paragraphs with proper spacing
+        p: ({ children }) => (
+          <p className="text-foreground/90 leading-relaxed mb-4 last:mb-0">
+            {children}
+          </p>
+        ),
+
+        // Enhanced tables with glassmorphism
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-6 rounded-2xl border-2 border-border/50 shadow-depth">
+            <table className="w-full border-collapse">
+              {children}
+            </table>
+          </div>
+        ),
+        thead: ({ children }) => (
+          <thead className="gradient-primary text-white">
+            {children}
+          </thead>
+        ),
+        tbody: ({ children }) => (
+          <tbody className="glassmorphism">
+            {children}
+          </tbody>
+        ),
+        tr: ({ children, ...props }) => (
+          <tr
+            className={cn(
+              'border-b border-border/30 transition-all duration-200',
+              !props.isHeader && 'hover:bg-primary/5'
+            )}
+          >
+            {children}
+          </tr>
+        ),
+        th: ({ children }) => (
+          <th className="px-6 py-4 text-left text-sm font-bold">
+            {children}
+          </th>
+        ),
+        td: ({ children }) => (
+          <td className="px-6 py-4 text-sm">
+            {children}
+          </td>
+        ),
+
+        // Unordered lists with custom icons
+        ul: ({ children }) => (
+          <ul className="space-y-2 my-4">
+            {children}
+          </ul>
+        ),
+        li: ({ children, ordered }) => {
+          // Detect content type and add appropriate emoji
+          const content = String(children);
+          let icon = '•';
+
+          if (content.toLowerCase().includes('hotel') || content.toLowerCase().includes('stay')) {
+            icon = '🏨';
+          } else if (content.toLowerCase().includes('restaurant') || content.toLowerCase().includes('food') || content.toLowerCase().includes('eat')) {
+            icon = '🍽️';
+          } else if (content.toLowerCase().includes('flight') || content.toLowerCase().includes('fly')) {
+            icon = '✈️';
+          } else if (content.toLowerCase().includes('morning')) {
+            icon = '🌅';
+          } else if (content.toLowerCase().includes('afternoon')) {
+            icon = '☀️';
+          } else if (content.toLowerCase().includes('evening') || content.toLowerCase().includes('dinner')) {
+            icon = '🌆';
+          } else if (content.toLowerCase().includes('night')) {
+            icon = '🌙';
+          } else if (content.toLowerCase().includes('activity') || content.toLowerCase().includes('visit')) {
+            icon = '🎯';
+          } else if (content.toLowerCase().includes('price') || content.toLowerCase().includes('cost') || content.toLowerCase().includes('$') || content.toLowerCase().includes('€')) {
+            icon = '💰';
+          }
+
+          return ordered ? (
+            <li className="flex gap-3 items-start">
+              <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full gradient-primary text-white text-xs font-bold mt-0.5">
+                {/* Number will be auto-generated by CSS */}
+              </span>
+              <span className="flex-1">{children}</span>
+            </li>
+          ) : (
+            <li className="flex gap-3 items-start">
+              <span className="flex-shrink-0 text-lg leading-none mt-0.5">{icon}</span>
+              <span className="flex-1">{children}</span>
+            </li>
+          );
+        },
+
+        // Ordered lists with numbered badges
+        ol: ({ children }) => (
+          <ol className="space-y-2 my-4 list-none">
+            {children}
+          </ol>
+        ),
+
+        // Enhanced links
+        a: ({ children, href }) => (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-primary font-medium hover:text-accent-foreground transition-colors duration-200 underline decoration-primary/30 hover:decoration-primary decoration-2 underline-offset-2"
+          >
+            {children}
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        ),
+
+        // Strong (bold) text
+        strong: ({ children }) => (
+          <strong className="font-bold text-foreground">
+            {children}
+          </strong>
+        ),
+
+        // Emphasis (italic) text
+        em: ({ children }) => (
+          <em className="italic text-foreground/90">
+            {children}
+          </em>
+        ),
+
+        // Code blocks
+        code: ({ inline, children, className }) => {
+          if (inline) {
+            return (
+              <code className="px-2 py-0.5 rounded-lg bg-muted/80 text-primary font-mono text-sm border border-border/30">
+                {children}
+              </code>
+            );
+          }
+          return (
+            <pre className="my-4 p-4 rounded-2xl bg-muted/50 border-2 border-border/30 overflow-x-auto">
+              <code className={cn('font-mono text-sm', className)}>
+                {children}
+              </code>
+            </pre>
+          );
+        },
+
+        // Blockquotes
+        blockquote: ({ children }) => (
+          <blockquote className="my-4 pl-6 border-l-4 border-primary/50 italic text-foreground/80 bg-primary/5 py-3 pr-4 rounded-r-xl">
+            {children}
+          </blockquote>
+        ),
+
+        // Horizontal rules
+        hr: () => (
+          <hr className="my-8 border-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+        ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
