@@ -443,7 +443,7 @@ export default function TripsPage() {
             </p>
           </div>
           <Link
-            href="/"
+            href="/plan"
             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl gradient-primary text-white font-medium hover:opacity-90 transition-opacity shadow-lg"
           >
             <Plus className="h-4 w-4" />
@@ -467,7 +467,7 @@ export default function TripsPage() {
               Start planning your next adventure! Search for destinations, add places, and organize your perfect trip.
             </p>
             <Link
-              href="/"
+              href="/plan"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl gradient-primary text-white font-medium hover:opacity-90 transition-opacity shadow-lg"
             >
               <Plus className="h-5 w-5" />

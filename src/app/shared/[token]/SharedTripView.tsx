@@ -193,7 +193,7 @@ export function SharedTripView({ trip, cards: initialCards, role }: SharedTripVi
             Shared trip by the owner
           </span>
           <Link
-            href="/"
+            href="/plan"
             className="text-sm font-medium text-primary hover:underline"
           >
             Create your own trip

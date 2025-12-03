@@ -285,7 +285,7 @@ export default function TripPage({ params }: PageProps) {
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <p className="text-lg text-muted-foreground">{error || 'Trip not found'}</p>
         <Link
-          href="/"
+          href="/plan"
           className="flex items-center gap-2 text-primary hover:underline"
         >
           <ArrowLeft className="h-4 w-4" />
