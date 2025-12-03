@@ -31,7 +31,6 @@ export function RestaurantCard({ card, onAddToTrip, onSave, onClick }: Restauran
   };
 
   const mainImage = card.photos[0] || '/placeholder-restaurant.jpg';
-  const priceDisplay = card.price_level ? '$'.repeat(card.price_level) : null;
 
   return (
     <motion.div
@@ -51,6 +50,8 @@ export function RestaurantCard({ card, onAddToTrip, onSave, onClick }: Restauran
         <img
           src={mainImage}
           alt={card.name}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
           onError={(e) => {
             e.currentTarget.src = '/placeholder-restaurant.jpg';
@@ -93,11 +94,6 @@ export function RestaurantCard({ card, onAddToTrip, onSave, onClick }: Restauran
             <div className="flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-gray-800/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
               <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
               <span className="text-sm font-bold text-foreground">{card.rating.toFixed(1)}</span>
-            </div>
-          )}
-          {priceDisplay && (
-            <div className="rounded-full bg-white/95 dark:bg-gray-800/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
-              <span className="text-sm font-bold text-green-600 dark:text-green-400">{priceDisplay}</span>
             </div>
           )}
         </div>

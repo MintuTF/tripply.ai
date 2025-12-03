@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { PlaceCard } from '@/types';
 import { cn } from '@/lib/utils';
-import { Star, MapPin, ExternalLink, Plus, Bookmark, Activity, Clock, DollarSign } from 'lucide-react';
+import { Star, MapPin, ExternalLink, Plus, Bookmark, Activity, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface ActivityCardProps {
@@ -50,6 +50,8 @@ export function ActivityCard({ card, onAddToTrip, onSave, onClick }: ActivityCar
         <img
           src={mainImage}
           alt={card.name}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
           onError={(e) => {
             e.currentTarget.src = '/placeholder-activity.jpg';
@@ -110,21 +112,13 @@ export function ActivityCard({ card, onAddToTrip, onSave, onClick }: ActivityCar
           </div>
         )}
 
-        {/* Duration & Price */}
-        <div className="mb-3 flex items-center gap-3">
-          {card.duration && (
-            <div className="flex items-center gap-1.5 text-xs text-foreground/80">
-              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{card.duration}</span>
-            </div>
-          )}
-          {card.price && (
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-              <DollarSign className="h-3.5 w-3.5" />
-              <span>${card.price}</span>
-            </div>
-          )}
-        </div>
+        {/* Duration */}
+        {card.duration && (
+          <div className="mb-3 flex items-center gap-1.5 text-xs text-foreground/80">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+            <span>{card.duration}</span>
+          </div>
+        )}
 
         {/* Description */}
         {card.description && (

@@ -321,3 +321,47 @@ export async function deleteShareLink(linkId: string): Promise<boolean> {
 
   return true;
 }
+
+// ==================== WELCOME EMAIL ====================
+
+/**
+ * Check if welcome email was already sent to a user
+ * Returns true if email was sent (fail-safe: returns true on error to prevent duplicates)
+ */
+export async function hasWelcomeEmailBeenSent(userId: string): Promise<boolean> {
+  const supabase = await createServerComponentClient();
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('welcome_email_sent_at')
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    console.error('Error checking welcome email status:', error);
+    return true; // Fail safe: assume sent to prevent duplicates
+  }
+
+  return data?.welcome_email_sent_at !== null;
+}
+
+/**
+ * Mark welcome email as sent for a user
+ * Uses atomic update to prevent race conditions (only updates if welcome_email_sent_at is still null)
+ */
+export async function markWelcomeEmailSent(userId: string): Promise<boolean> {
+  const supabase = await createServerComponentClient();
+
+  const { error } = await supabase
+    .from('users')
+    .update({ welcome_email_sent_at: new Date().toISOString() })
+    .eq('id', userId)
+    .is('welcome_email_sent_at', null); // Atomic: only succeeds if still null
+
+  if (error) {
+    console.error('Error marking welcome email sent:', error);
+    return false;
+  }
+
+  return true;
+}

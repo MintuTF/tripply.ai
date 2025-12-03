@@ -2,7 +2,7 @@
 
 import { Card } from '@/types';
 import { cn } from '@/lib/utils';
-import { X, Star, DollarSign, MapPin, Check, Minus } from 'lucide-react';
+import { X, Star, MapPin, Check, Minus } from 'lucide-react';
 
 interface CompareDrawerProps {
   cards: Card[];
@@ -27,9 +27,7 @@ export function CompareDrawer({ cards, onClose, onRemoveCard }: CompareDrawerPro
   const attributes = [
     { key: 'name', label: 'Name', type: 'text' },
     { key: 'rating', label: 'Rating', type: 'rating' },
-    { key: 'price', label: 'Price', type: 'price' },
     { key: 'address', label: 'Location', type: 'text' },
-    { key: 'price_level', label: 'Price Level', type: 'price_level' },
     { key: 'review_count', label: 'Reviews', type: 'number' },
     { key: 'distance', label: 'Distance', type: 'text' },
     { key: 'phone', label: 'Phone', type: 'text' },
@@ -190,22 +188,6 @@ function renderValue(value: any, type: string) {
           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
           <span className="font-medium">{value}</span>
         </div>
-      );
-
-    case 'price':
-      return (
-        <div className="flex items-center gap-1">
-          <DollarSign className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium">{value}</span>
-          {typeof value === 'number' && <span className="text-muted-foreground">/night</span>}
-        </div>
-      );
-
-    case 'price_level':
-      return (
-        <span className="text-muted-foreground">
-          {'$'.repeat(value)}
-        </span>
       );
 
     case 'number':

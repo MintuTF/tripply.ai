@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Card } from '@/types';
 import { cn } from '@/lib/utils';
 import { Star, Heart, ExternalLink, Pin, MoreVertical } from 'lucide-react';
+import { getLabelConfig } from '@/components/board/CardLabels';
 
 interface ResultCardProps {
   card: Card;
@@ -24,10 +25,10 @@ export function ResultCard({
   onPin,
   variant = 'default'
 }: ResultCardProps) {
-  const [isFavorited, setIsFavorited] = useState(card.is_favorited || false);
+  const [isFavorited, setIsFavorited] = useState(card.favorite || false);
   const [isPinned, setIsPinned] = useState(false);
 
-  const data = typeof card.data === 'string' ? JSON.parse(card.data) : card.data;
+  const data = typeof card.payload_json === 'string' ? JSON.parse(card.payload_json) : card.payload_json;
 
   const handleFavorite = () => {
     setIsFavorited(!isFavorited);
@@ -112,28 +113,16 @@ export function ResultCard({
           </button>
         </div>
 
-        {/* Rating & Price */}
-        <div className="flex items-center gap-3 text-sm">
-          {data.rating && (
-            <div className="flex items-center gap-1">
-              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-              <span className="font-medium">{data.rating}</span>
-              {data.review_count && (
-                <span className="text-muted-foreground">({data.review_count})</span>
-              )}
-            </div>
-          )}
-          {data.price_level && (
-            <span className="text-muted-foreground">
-              {'$'.repeat(data.price_level)}
-            </span>
-          )}
-          {data.price && (
-            <span className="font-semibold text-foreground">
-              ${data.price}/night
-            </span>
-          )}
-        </div>
+        {/* Rating */}
+        {data.rating && (
+          <div className="flex items-center gap-1 text-sm">
+            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+            <span className="font-medium">{data.rating}</span>
+            {data.review_count && (
+              <span className="text-muted-foreground">({data.review_count})</span>
+            )}
+          </div>
+        )}
 
         {/* Description */}
         {variant !== 'compact' && data.description && (
@@ -155,6 +144,39 @@ export function ResultCard({
             ))}
           </div>
         )}
+
+        {/* User Labels */}
+        {(() => {
+          const statusLabels = ['considering', 'shortlist', 'booked', 'dismissed'];
+          const displayLabels = (card.labels || []).filter(l => !statusLabels.includes(l));
+
+          if (displayLabels.length === 0) return null;
+
+          return (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {displayLabels.slice(0, 3).map((labelId) => {
+                const config = getLabelConfig(labelId, card.type);
+                if (!config) return null;
+                return (
+                  <span
+                    key={labelId}
+                    className={cn(
+                      'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-white',
+                      config.color
+                    )}
+                  >
+                    {config.label}
+                  </span>
+                );
+              })}
+              {displayLabels.length > 3 && (
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">
+                  +{displayLabels.length - 3} more
+                </span>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Actions */}
         {variant === 'detailed' && (
@@ -180,12 +202,6 @@ export function ResultCard({
         )}
       </div>
 
-      {/* Label indicator */}
-      {card.label && (
-        <div className="absolute -right-2 -top-2 rounded-full gradient-primary px-3 py-1 text-xs font-bold text-white shadow-lg capitalize">
-          {card.label}
-        </div>
-      )}
     </div>
   );
 }

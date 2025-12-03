@@ -7,6 +7,9 @@ import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { cn } from '@/lib/utils';
 import { Sparkles } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { SignInButton } from '@/components/auth/SignInButton';
+import { UserMenu } from '@/components/auth/UserMenu';
 
 interface ChatInterfaceProps {
   tripId?: string;
@@ -17,6 +20,7 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user, loading: authLoading } = useAuth();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -117,6 +121,16 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
                         : msg
                     )
                   );
+                } else if (data.type === 'cards') {
+                  // Add cards IMMEDIATELY after tools complete (BEFORE AI response text)
+                  // This provides instant visual feedback to the user
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === assistantMessageId
+                        ? { ...msg, cards_json: data.cards }
+                        : msg
+                    )
+                  );
                 } else if (data.type === 'content') {
                   // Append content chunk to message
                   setMessages((prev) =>
@@ -127,14 +141,13 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
                     )
                   );
                 } else if (data.type === 'done') {
-                  // Add citations, cards, and final metadata
+                  // Add citations and final metadata (cards already added above)
                   setMessages((prev) =>
                     prev.map((msg) =>
                       msg.id === assistantMessageId
                         ? {
                             ...msg,
                             citations_json: data.citations,
-                            cards_json: data.cards,
                           }
                         : msg
                     )
@@ -170,17 +183,25 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container max-w-4xl mx-auto px-4 py-8">
           {/* Logo and Title */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl gradient-primary shadow-glow">
-              <Sparkles className="h-5 w-5 text-white" />
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl gradient-primary shadow-glow">
+                <Sparkles className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-accent-foreground to-secondary bg-clip-text text-transparent">
+                  Tripply
+                </h1>
+                <p className="text-xs text-muted-foreground font-medium">
+                  AI Travel Research Assistant
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-accent-foreground to-secondary bg-clip-text text-transparent">
-                Tripply
-              </h1>
-              <p className="text-xs text-muted-foreground font-medium">
-                AI Travel Research Assistant
-              </p>
+            {/* Auth UI */}
+            <div className="flex items-center gap-2">
+              {!authLoading && (
+                user ? <UserMenu /> : <SignInButton />
+              )}
             </div>
           </div>
 
@@ -284,14 +305,6 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t py-4">
-        <div className="container max-w-4xl mx-auto px-4 text-center">
-          <p className="text-xs text-muted-foreground">
-            Powered by <span className="text-primary font-medium">OpenAI</span> • Live weather, places, and event data
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { Card } from '@/types';
 import { ResultCard } from '@/components/cards/ResultCard';
 import { cn } from '@/lib/utils';
-import { MoreVertical, Trash2, Tag, Copy, ExternalLink } from 'lucide-react';
+import { MoreVertical, Trash2 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface CardListProps {
   cards: Card[];
@@ -26,10 +27,16 @@ export function CardList({
 }: CardListProps) {
   const [draggedCard, setDraggedCard] = useState<Card | null>(null);
   const [showMenuFor, setShowMenuFor] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; cardId: string | null }>({
+    isOpen: false,
+    cardId: null,
+  });
 
   const handleDragStart = (card: Card, e: React.DragEvent) => {
     setDraggedCard(card);
     e.dataTransfer.effectAllowed = 'move';
+    // Store card data for cross-column drag and drop
+    e.dataTransfer.setData('application/json', JSON.stringify(card));
     e.dataTransfer.setData('text/html', e.currentTarget.innerHTML);
   };
 
@@ -44,23 +51,45 @@ export function CardList({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (draggedCard && draggedCard.label !== columnId) {
-      const updatedCard = { ...draggedCard, label: columnId };
+    // Try local state first, then fall back to dataTransfer (cross-column drag)
+    let cardToUpdate: Card | null = draggedCard;
+    if (!cardToUpdate) {
+      try {
+        const cardData = e.dataTransfer.getData('application/json');
+        if (cardData) {
+          cardToUpdate = JSON.parse(cardData);
+        }
+      } catch (err) {
+        console.error('Failed to parse dragged card data:', err);
+        return;
+      }
+    }
+
+    if (cardToUpdate) {
+      // Update labels array - remove old column labels, add new one
+      const columnIds = ['considering', 'shortlist', 'booked', 'dismissed'];
+      const newLabels = cardToUpdate.labels.filter((l: string) => !columnIds.includes(l));
+      newLabels.push(columnId);
+
+      const updatedCard = { ...cardToUpdate, labels: newLabels };
       onCardUpdate?.(updatedCard);
     }
   };
 
-  const handleDelete = (cardId: string) => {
-    if (confirm('Are you sure you want to delete this card?')) {
-      onCardDelete?.(cardId);
-    }
+  const handleDeleteClick = (cardId: string) => {
+    setDeleteConfirm({ isOpen: true, cardId });
     setShowMenuFor(null);
   };
 
-  const handleLabelChange = (card: Card, newLabel: string) => {
-    const updatedCard = { ...card, label: newLabel };
-    onCardUpdate?.(updatedCard);
-    setShowMenuFor(null);
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm.cardId) {
+      onCardDelete?.(deleteConfirm.cardId);
+    }
+    setDeleteConfirm({ isOpen: false, cardId: null });
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirm({ isOpen: false, cardId: null });
   };
 
   if (cards.length === 0) {
@@ -82,9 +111,9 @@ export function CardList({
       onDrop={handleDrop}
       className={cn('space-y-3', columnId === 'list' && 'space-y-2')}
     >
-      {cards.map((card) => (
+      {cards.map((card, index) => (
         <div
-          key={card.id}
+          key={card.id || `card-${index}`}
           draggable
           onDragStart={(e) => handleDragStart(card, e)}
           onDragEnd={handleDragEnd}
@@ -104,39 +133,10 @@ export function CardList({
 
             {/* Dropdown Menu */}
             {showMenuFor === card.id && (
-              <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border bg-background shadow-lg">
+              <div className="absolute right-0 top-full mt-1 w-36 rounded-lg border bg-background shadow-lg">
                 <div className="p-1">
-                  {/* Move to Column */}
-                  <div className="mb-1 px-2 py-1 text-xs font-medium text-muted-foreground">
-                    Move to
-                  </div>
-                  {['considering', 'shortlist', 'booked', 'dismissed'].map((label) => (
-                    <button
-                      key={label}
-                      onClick={() => handleLabelChange(card, label)}
-                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
-                    >
-                      <Tag className="h-3 w-3" />
-                      <span className="capitalize">{label}</span>
-                    </button>
-                  ))}
-
-                  <div className="my-1 border-t" />
-
-                  {/* Other Actions */}
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(JSON.stringify(card.data));
-                      setShowMenuFor(null);
-                    }}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
-                  >
-                    <Copy className="h-3 w-3" />
-                    Copy details
-                  </button>
-
-                  <button
-                    onClick={() => handleDelete(card.id)}
+                    onClick={() => handleDeleteClick(card.id)}
                     className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -158,6 +158,17 @@ export function CardList({
           />
         </div>
       ))}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="Delete Card"
+        message="Are you sure you want to delete this card? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
     </div>
   );
 }

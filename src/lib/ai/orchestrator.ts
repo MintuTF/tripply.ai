@@ -240,7 +240,7 @@ export async function* orchestrateChatStream(params: {
     preferences?: Record<string, any>;
   };
 }): AsyncGenerator<{
-  type: 'toolCalls' | 'content' | 'done';
+  type: 'toolCalls' | 'cards' | 'content' | 'done';
   toolCalls?: ToolCall[];
   content?: string;
   citations?: Citation[];
@@ -303,8 +303,8 @@ ${tripContext.preferences ? `- Preferences: ${JSON.stringify(tripContext.prefere
     // Add assistant message with tool calls to history
     conversationHistory.push(assistantMessage);
 
-    // Execute all tool calls
-    for (const toolCall of assistantMessage.tool_calls) {
+    // Execute all tool calls IN PARALLEL for faster response
+    const toolExecutionPromises = assistantMessage.tool_calls.map(async (toolCall) => {
       const { id, function: func } = toolCall;
       const parameters = JSON.parse(func.arguments);
 
@@ -314,19 +314,21 @@ ${tripContext.preferences ? `- Preferences: ${JSON.stringify(tripContext.prefere
         const result = await executeTool(func.name, parameters);
         toolResults.push(result);
 
-        toolCalls.push({
+        const toolCallData: ToolCall = {
           id,
           tool: func.name,
           parameters,
           result,
-        });
+        };
+        toolCalls.push(toolCallData);
 
         const toolMessage: ChatCompletionToolMessageParam = {
           role: 'tool',
           tool_call_id: id,
           content: JSON.stringify(result),
         };
-        conversationHistory.push(toolMessage);
+
+        return { toolCallData, toolMessage, error: null };
       } catch (error) {
         console.error(`Tool call failed: ${func.name}`, error);
         const errorMessage: ChatCompletionToolMessageParam = {
@@ -337,15 +339,35 @@ ${tripContext.preferences ? `- Preferences: ${JSON.stringify(tripContext.prefere
             details: error instanceof Error ? error.message : 'Unknown error',
           }),
         };
-        conversationHistory.push(errorMessage);
+
+        return { toolCallData: null, toolMessage: errorMessage, error };
       }
-    }
+    });
+
+    // Wait for all tools to complete
+    const results = await Promise.all(toolExecutionPromises);
+
+    // Add all tool messages to conversation history
+    results.forEach(({ toolMessage }) => {
+      conversationHistory.push(toolMessage);
+    });
 
     // Yield tool calls first
     yield {
       type: 'toolCalls',
       toolCalls,
     };
+
+    // Extract cards from tool results and yield them IMMEDIATELY
+    const cards = extractCardsFromToolResults(toolCalls);
+
+    // Stream cards early (before AI response) for instant UX
+    if (cards.length > 0) {
+      yield {
+        type: 'cards',
+        cards,
+      };
+    }
 
     // Now stream the final response with tool results
     const stream = await openai.chat.completions.create({
@@ -385,14 +407,11 @@ ${tripContext.preferences ? `- Preferences: ${JSON.stringify(tripContext.prefere
   // Extract citations from tool results
   const citations = extractCitations(toolResults);
 
-  // Extract structured cards from tool results
-  const cards = extractCardsFromToolResults(toolCalls);
-
-  // Yield final data
+  // Note: Cards are already streamed early above, so we don't send them again here
+  // Yield final metadata only
   yield {
     type: 'done',
     citations,
-    cards,
     intent: intentResult,
   };
 }

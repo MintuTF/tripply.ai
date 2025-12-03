@@ -93,6 +93,14 @@ export async function POST(request: Request) {
                 toolCalls: chunk.toolCalls,
               });
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            } else if (chunk.type === 'cards') {
+              // Send cards immediately after tools complete (BEFORE AI writes response)
+              cardsData = chunk.cards || [];
+              const data = JSON.stringify({
+                type: 'cards',
+                cards: chunk.cards,
+              });
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             } else if (chunk.type === 'content') {
               // Stream content chunks
               fullResponse += chunk.content;
@@ -102,13 +110,11 @@ export async function POST(request: Request) {
               });
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             } else if (chunk.type === 'done') {
-              // Send final metadata including cards
+              // Send final metadata (citations and intent only, cards already sent)
               citationsData = chunk.citations || [];
-              cardsData = chunk.cards || [];
               const data = JSON.stringify({
                 type: 'done',
                 citations: chunk.citations,
-                cards: chunk.cards,
                 intent: chunk.intent,
               });
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));

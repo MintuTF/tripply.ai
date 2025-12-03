@@ -16,15 +16,25 @@ export type UserPreferences = {
   walking_tolerance?: 'high' | 'medium' | 'low';
 };
 
+export type TripDestination = {
+  name: string;
+  place_id?: string;
+  coordinates?: { lat: number; lng: number };
+};
+
+export type TripStatus = 'planning' | 'in_progress' | 'completed' | 'archived';
+
 export type Trip = {
   id: string;
   user_id: string;
   title: string;
+  destination?: TripDestination;
   dates: {
     start: string;
     end: string;
   };
   party_json: TripParty;
+  status: TripStatus;
   budget_range?: [number, number];
   privacy: 'private' | 'shared';
   created_at: string;
@@ -93,11 +103,22 @@ export type Card = {
   labels: string[];
   favorite: boolean;
   ranking?: number;
+  day?: number; // Which day of trip (1-based: Day 1, Day 2, etc.)
+  time_slot?: string; // Time for this stop (e.g., "09:00", "14:30")
+  order?: number; // Order within the day (for sequencing stops)
+  travel_info?: TravelInfo; // Travel time/distance to next stop in sequence
   created_at: string;
   updated_at: string;
 };
 
 export type CardType = 'hotel' | 'spot' | 'food' | 'activity' | 'note';
+
+export type TravelInfo = {
+  distance: number; // in km
+  duration: number; // in minutes
+  mode: 'driving' | 'walking' | 'transit' | 'flight';
+  next_stop_id: string; // ID of the next card in sequence
+};
 
 export type HotelCard = {
   name: string;
@@ -111,6 +132,8 @@ export type HotelCard = {
   distance_to_center?: number;
   pros?: string[];
   cons?: string[];
+  cost?: number; // Actual booked cost
+  currency?: string; // Currency code (e.g., USD, EUR)
 };
 
 export type SpotCard = {
@@ -123,6 +146,8 @@ export type SpotCard = {
   opening_hours?: string;
   url?: string;
   description?: string;
+  cost?: number; // Admission or ticket cost
+  currency?: string; // Currency code (e.g., USD, EUR)
 };
 
 export type FoodCard = {
@@ -136,6 +161,8 @@ export type FoodCard = {
   opening_hours?: string;
   url?: string;
   dietary_tags?: string[];
+  cost?: number; // Estimated meal cost
+  currency?: string; // Currency code (e.g., USD, EUR)
 };
 
 export type ActivityCard = {
@@ -149,6 +176,8 @@ export type ActivityCard = {
   photos?: string[];
   url?: string;
   description?: string;
+  cost?: number; // Actual booked cost (use instead of price if different)
+  currency?: string; // Currency code (e.g., USD, EUR)
 };
 
 export type NoteCard = {
@@ -248,17 +277,33 @@ export type WeatherData = {
 };
 
 // Places Types
+export type PlaceReview = {
+  author_name: string;
+  author_url?: string;
+  profile_photo_url?: string;
+  rating: number;
+  relative_time_description: string;
+  text: string;
+  time: number;
+  photos?: string[]; // Review photos from Google Places API
+};
+
 export type PlaceResult = {
   place_id: string;
   name: string;
   address: string;
   coordinates: { lat: number; lng: number };
   rating?: number;
+  review_count?: number;
   price_level?: number;
   types: string[];
   photos?: string[];
   opening_hours?: string;
   url?: string;
+  phone?: string;
+  website?: string;
+  reviews?: PlaceReview[];
+  editorial_summary?: string;
 };
 
 // Search Types

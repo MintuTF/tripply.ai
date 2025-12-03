@@ -1,29 +1,79 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Card } from '@/types';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { Card, Trip, CardType } from '@/types';
 import { CardList } from './CardList';
+import { KanbanColumn } from './KanbanColumn';
+import { ItineraryView } from './ItineraryView';
+import { DayAssignmentModal } from './DayAssignmentModal';
+import { CardDetailPanel } from './CardDetailPanel';
+import { BudgetWidget } from '@/components/budget/BudgetWidget';
+import { BudgetBreakdown } from '@/components/budget/BudgetBreakdown';
+import { ResultCard } from '@/components/cards/ResultCard';
 import { cn } from '@/lib/utils';
-import { Plus, Filter, Search, Grid, List, LayoutGrid } from 'lucide-react';
+import { Search, Grid, List, LayoutGrid, Calendar, Wallet, Hotel, Utensils, Compass } from 'lucide-react';
+import { TripInfoHeader } from '@/components/trip/TripInfoHeader';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 
 interface TripBoardProps {
   tripId: string;
+  trip: Trip;
   cards?: Card[];
   onCardUpdate?: (card: Card) => void;
   onCardDelete?: (cardId: string) => void;
+  onTripUpdate?: (updates: Partial<Trip>) => Promise<void>;
+  onArchive?: () => void;
+  isLoggedOut?: boolean;
 }
 
 /**
  * TripBoard - Kanban-style board for organizing saved cards
  * Inspired by Notion and Linear's card organization
  */
-export function TripBoard({ tripId, cards = [], onCardUpdate, onCardDelete }: TripBoardProps) {
-  const [viewMode, setViewMode] = useState<'kanban' | 'grid' | 'list'>('kanban');
+export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete, onTripUpdate, onArchive, isLoggedOut }: TripBoardProps) {
+  const [viewMode, setViewMode] = useState<'kanban' | 'grid' | 'list' | 'itinerary' | 'budget'>('kanban');
+  const [totalBudget, setTotalBudget] = useState<number | undefined>(trip.budget_range ? trip.budget_range[1] : undefined);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterLabel, setFilterLabel] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<string | null>(null);
+  const [scheduleModalCard, setScheduleModalCard] = useState<Card | null>(null);
 
-  // Define board columns
+  // Card detail panel state
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+
+  // Keep selectedCard in sync with cards prop when card data changes
+  useEffect(() => {
+    if (selectedCard) {
+      const updatedCard = cards.find(c => c.id === selectedCard.id);
+      if (updatedCard && JSON.stringify(updatedCard) !== JSON.stringify(selectedCard)) {
+        setSelectedCard(updatedCard);
+      }
+    }
+  }, [cards, selectedCard]);
+
+  // Drag and drop state
+  const [activeCard, setActiveCard] = useState<Card | null>(null);
+
+  // Setup drag-and-drop sensors for dnd-kit
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px of movement before drag starts
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  // Define board columns (for legacy kanban view)
   const columns = [
     { id: 'considering', label: 'Considering', color: 'blue' },
     { id: 'shortlist', label: 'Shortlist', color: 'purple' },
@@ -31,63 +81,234 @@ export function TripBoard({ tripId, cards = [], onCardUpdate, onCardDelete }: Tr
     { id: 'dismissed', label: 'Dismissed', color: 'gray' },
   ];
 
+  // Define vertical category sections (new auto-organized view)
+  const categories = [
+    { id: 'hotel' as CardType, label: 'Hotels', icon: Hotel, color: 'blue', gradient: 'from-blue-500/10 to-blue-600/5' },
+    { id: 'food' as CardType, label: 'Restaurants', icon: Utensils, color: 'orange', gradient: 'from-orange-500/10 to-orange-600/5' },
+    { id: 'spot' as CardType, label: 'Things to Do', icon: Compass, color: 'purple', gradient: 'from-purple-500/10 to-purple-600/5' },
+  ];
+
   // Filter and organize cards
   const filteredCards = useMemo(() => {
     return cards.filter((card) => {
       // Search filter
       if (searchQuery) {
-        const data = typeof card.data === 'string' ? JSON.parse(card.data) : card.data;
-        const name = data.name || data.title || '';
+        const payload = typeof card.payload_json === 'string' ? JSON.parse(card.payload_json) : card.payload_json;
+        const name = payload.name || payload.title || '';
         if (!name.toLowerCase().includes(searchQuery.toLowerCase())) {
           return false;
         }
       }
 
-      // Label filter
-      if (filterLabel && card.label !== filterLabel) {
-        return false;
-      }
-
-      // Type filter
-      if (filterType && card.type !== filterType) {
-        return false;
-      }
-
       return true;
     });
-  }, [cards, searchQuery, filterLabel, filterType]);
+  }, [cards, searchQuery]);
 
-  // Group cards by column
+  // Group cards by column (for flat kanban view - kept for reference)
   const cardsByColumn = useMemo(() => {
     const grouped: Record<string, Card[]> = {};
     columns.forEach((col) => {
-      grouped[col.id] = filteredCards.filter((card) => card.label === col.id);
+      grouped[col.id] = filteredCards.filter((card) => card.labels.includes(col.id));
     });
     // Add unlabeled cards to 'considering'
     grouped.considering.push(
-      ...filteredCards.filter((card) => !card.label || !columns.find((c) => c.id === card.label))
+      ...filteredCards.filter((card) => card.labels.length === 0 || !card.labels.some(label => columns.find((c) => c.id === label)))
     );
     return grouped;
   }, [filteredCards, columns]);
 
-  // Get unique labels and types for filters
-  const availableLabels = useMemo(() => {
-    return Array.from(new Set(cards.map((c) => c.label).filter(Boolean))) as string[];
-  }, [cards]);
+  // Group cards by column AND category (nested structure for auto-organized kanban)
+  const cardsByColumnAndCategory = useMemo(() => {
+    const result: Record<string, Record<string, Card[]>> = {};
 
-  const availableTypes = useMemo(() => {
-    return Array.from(new Set(cards.map((c) => c.type))) as string[];
-  }, [cards]);
+    // Initialize structure
+    columns.forEach((col) => {
+      result[col.id] = {};
+      categories.forEach((cat) => {
+        result[col.id][cat.id] = [];
+      });
+    });
+
+    // First, get cards for each column
+    const columnCards: Record<string, Card[]> = {};
+    columns.forEach((col) => {
+      columnCards[col.id] = filteredCards.filter((card) => card.labels.includes(col.id));
+    });
+
+    // Add unlabeled cards to 'considering'
+    const unlabeledCards = filteredCards.filter(
+      (card) => card.labels.length === 0 || !card.labels.some(label => columns.find((c) => c.id === label))
+    );
+    columnCards.considering = [...(columnCards.considering || []), ...unlabeledCards];
+
+    // Then group by category within each column AND sort by order
+    columns.forEach((col) => {
+      categories.forEach((cat) => {
+        result[col.id][cat.id] = (columnCards[col.id]?.filter((card) => card.type === cat.id) || [])
+          .sort((a, b) => (a.order || 0) - (b.order || 0));
+      });
+    });
+
+    return result;
+  }, [filteredCards, columns, categories]);
+
+  // Handle day assignment
+  const handleDayAssignment = (cardId: string, day: number, timeSlot?: string) => {
+    const card = cards.find(c => c.id === cardId);
+    if (card && onCardUpdate) {
+      onCardUpdate({
+        ...card,
+        day,
+        time_slot: timeSlot,
+        // Auto-set order as last in that day
+        order: cards.filter(c => c.day === day).length + 1,
+      });
+    }
+  };
+
+  // Helper: Get column ID from card's labels
+  const getColumnId = (card: Card): string => {
+    const columnIds = ['considering', 'shortlist', 'booked', 'dismissed'];
+    const columnLabel = card.labels.find(l => columnIds.includes(l));
+    return columnLabel || 'considering';
+  };
+
+  // Helper: Get cards in a specific column
+  const getCardsInColumn = useCallback((columnId: string): Card[] => {
+    return filteredCards.filter(card => {
+      const cardColumnId = getColumnId(card);
+      return cardColumnId === columnId;
+    }).sort((a, b) => (a.order || 0) - (b.order || 0));
+  }, [filteredCards]);
+
+  // Drag handlers for dnd-kit
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const card = filteredCards.find(c => c.id === active.id);
+    if (card) {
+      setActiveCard(card);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveCard(null);
+
+    // Exit early if no target or same position
+    if (!over || active.id === over.id) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    // Find the active card
+    const draggedCard = filteredCards.find(c => c.id === activeId);
+    if (!draggedCard) return;
+
+    // Get source column
+    const sourceColumnId = getColumnId(draggedCard);
+
+    // Determine target column - could be dropping on a card or a column
+    let targetColumnId = sourceColumnId;
+
+    // Check if dropping on a column (droppable)
+    if (overId.startsWith('column-')) {
+      targetColumnId = overId.replace('column-', '');
+    } else {
+      // Dropping on a card - find its column
+      const overCard = filteredCards.find(c => c.id === overId);
+      if (overCard) {
+        targetColumnId = getColumnId(overCard);
+      }
+    }
+
+    // Same column - handle reordering WITHIN THE SAME CATEGORY
+    if (sourceColumnId === targetColumnId && !overId.startsWith('column-')) {
+      const overCard = filteredCards.find(c => c.id === overId);
+
+      // Only reorder if dragging within same category (hotel→hotel, food→food, etc.)
+      if (overCard && draggedCard.type === overCard.type) {
+        // Get cards of the same type in this column
+        const categoryCards = filteredCards
+          .filter(c => getColumnId(c) === sourceColumnId && c.type === draggedCard.type)
+          .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        const oldIndex = categoryCards.findIndex(c => c.id === activeId);
+        const newIndex = categoryCards.findIndex(c => c.id === overId);
+
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const reorderedCards = arrayMove(categoryCards, oldIndex, newIndex);
+
+          // Update order for all cards in this category
+          reorderedCards.forEach((card, index) => {
+            if (onCardUpdate) {
+              onCardUpdate({ ...card, order: index });
+            }
+          });
+        }
+      }
+      // If dragging between categories within same column, do nothing (card snaps back)
+    }
+    // Different column - move card to new column
+    else if (sourceColumnId !== targetColumnId) {
+      // Remove old column label and add new one
+      const columnIds = ['considering', 'shortlist', 'booked', 'dismissed'];
+      const newLabels = draggedCard.labels.filter(l => !columnIds.includes(l));
+      newLabels.push(targetColumnId);
+
+      // Calculate new order based on drop position
+      const targetColumnCards = getCardsInColumn(targetColumnId);
+      let newOrder = targetColumnCards.length; // Default: end of column
+
+      // If dropping on a card, insert at that position
+      if (!overId.startsWith('column-')) {
+        const targetIndex = targetColumnCards.findIndex(c => c.id === overId);
+        if (targetIndex >= 0) {
+          newOrder = targetIndex;
+        }
+      }
+
+      if (onCardUpdate) {
+        onCardUpdate({ ...draggedCard, labels: newLabels, order: newOrder });
+
+        // Reorder remaining cards in target column if dropped in middle
+        if (newOrder < targetColumnCards.length) {
+          targetColumnCards.forEach((card, index) => {
+            if (index >= newOrder) {
+              onCardUpdate({ ...card, order: index + 1 });
+            }
+          });
+        }
+      }
+    }
+  };
+
+  // Handle trip updates
+  const handleTripUpdate = async (updates: Partial<Trip>) => {
+    if (onTripUpdate) {
+      await onTripUpdate(updates);
+    }
+  };
+
+  // Handle card click to open detail panel
+  const handleCardClick = (card: Card) => {
+    setSelectedCard(card);
+  };
 
   return (
     <div className="flex h-full flex-col gradient-mesh">
-      {/* Header */}
-      <div className="border-b border-border/50 glassmorphism px-6 py-5 shadow-sm">
+      {/* Trip Info Header */}
+      <TripInfoHeader
+        trip={trip}
+        onTripUpdate={handleTripUpdate}
+        onArchive={onArchive}
+        isDraft={trip.id === 'draft'}
+        isLoggedOut={isLoggedOut}
+      />
+
+      {/* Board Controls Header */}
+      <div className="border-b border-border/50 bg-background px-6 py-3 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent-foreground bg-clip-text text-transparent">
-              Trip Board
-            </h1>
             <span className="rounded-full gradient-primary px-4 py-1.5 text-sm font-semibold text-white shadow-lg">
               {filteredCards.length} cards
             </span>
@@ -106,36 +327,6 @@ export function TripBoard({ tripId, cards = [], onCardUpdate, onCardDelete }: Tr
               />
             </div>
 
-            {/* Type Filter */}
-            <select
-              value={filterType || ''}
-              onChange={(e) => setFilterType(e.target.value || null)}
-              className="h-10 rounded-xl border-2 border-border/50 bg-card/50 backdrop-blur-sm px-4 text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:border-primary focus-visible:shadow-glow"
-            >
-              <option value="">All types</option>
-              {availableTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-
-            {/* Label Filter */}
-            {availableLabels.length > 0 && (
-              <select
-                value={filterLabel || ''}
-                onChange={(e) => setFilterLabel(e.target.value || null)}
-                className="h-10 rounded-xl border-2 border-border/50 bg-card/50 backdrop-blur-sm px-4 text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:border-primary focus-visible:shadow-glow"
-              >
-                <option value="">All columns</option>
-                {availableLabels.map((label) => (
-                  <option key={label} value={label}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            )}
-
             {/* View Mode */}
             <div className="flex rounded-xl border-2 border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
               <button
@@ -144,15 +335,37 @@ export function TripBoard({ tripId, cards = [], onCardUpdate, onCardDelete }: Tr
                   'px-3 py-2 transition-all duration-300',
                   viewMode === 'kanban' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
                 )}
+                title="Kanban View"
               >
                 <LayoutGrid className="h-4 w-4" />
               </button>
               <button
-                onClick={() => setViewMode('grid')}
+                onClick={() => setViewMode('itinerary')}
                 className={cn(
                   'border-x-2 border-border/50 px-3 py-2 transition-all duration-300',
+                  viewMode === 'itinerary' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
+                )}
+                title="Itinerary View"
+              >
+                <Calendar className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('budget')}
+                className={cn(
+                  'border-r-2 border-border/50 px-3 py-2 transition-all duration-300',
+                  viewMode === 'budget' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
+                )}
+                title="Budget View"
+              >
+                <Wallet className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={cn(
+                  'border-r-2 border-border/50 px-3 py-2 transition-all duration-300',
                   viewMode === 'grid' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
                 )}
+                title="Grid View"
               >
                 <Grid className="h-4 w-4" />
               </button>
@@ -162,6 +375,7 @@ export function TripBoard({ tripId, cards = [], onCardUpdate, onCardDelete }: Tr
                   'px-3 py-2 transition-all duration-300',
                   viewMode === 'list' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
                 )}
+                title="List View"
               >
                 <List className="h-4 w-4" />
               </button>
@@ -172,59 +386,77 @@ export function TripBoard({ tripId, cards = [], onCardUpdate, onCardDelete }: Tr
 
       {/* Board Content */}
       <div className="flex-1 overflow-hidden">
-        {viewMode === 'kanban' ? (
-          // Kanban View
-          <div className="flex h-full gap-4 overflow-x-auto p-6">
-            {columns.map((column) => (
-              <div key={column.id} className="flex min-w-[320px] flex-col">
-                {/* Column Header */}
-                <div className="mb-4 rounded-2xl border-2 border-border/30 p-4 backdrop-blur-sm shadow-sm"
-                  style={{
-                    background: column.color === 'blue' ? 'linear-gradient(135deg, rgba(88, 166, 193, 0.1), rgba(88, 166, 193, 0.05))' :
-                      column.color === 'purple' ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.05))' :
-                      column.color === 'green' ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05))' :
-                      'linear-gradient(135deg, rgba(107, 114, 128, 0.1), rgba(107, 114, 128, 0.05))'
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          'h-3 w-3 rounded-full shadow-lg',
-                          column.color === 'blue' && 'bg-primary shadow-primary/50',
-                          column.color === 'purple' && 'bg-accent-foreground shadow-accent-foreground/50',
-                          column.color === 'green' && 'bg-success shadow-success/50',
-                          column.color === 'gray' && 'bg-muted-foreground shadow-muted-foreground/50'
-                        )}
-                      />
-                      <h3 className="text-lg font-bold">{column.label}</h3>
-                      <span className="rounded-full bg-card/80 px-3 py-0.5 text-sm font-semibold shadow-sm">
-                        {cardsByColumn[column.id]?.length || 0}
-                      </span>
-                    </div>
-                    <button className="rounded-lg p-2 transition-all duration-300 hover:bg-card/50 hover:shadow-md">
-                      <Plus className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Column Cards */}
-                <CardList
-                  cards={cardsByColumn[column.id] || []}
-                  columnId={column.id}
+        {viewMode === 'budget' ? (
+          // Budget View
+          <div className="h-full overflow-y-auto p-6">
+            <div className="max-w-6xl mx-auto space-y-6">
+              <BudgetWidget
+                trip={trip}
+                cards={filteredCards}
+                totalBudget={totalBudget}
+                onUpdateBudget={setTotalBudget}
+              />
+              <BudgetBreakdown cards={filteredCards} />
+            </div>
+          </div>
+        ) : viewMode === 'itinerary' ? (
+          // Itinerary View
+          <div className="h-full overflow-y-auto p-6">
+            <ItineraryView
+              cards={filteredCards}
+              trip={trip}
+              onCardClick={handleCardClick}
+              onUpdateCard={(cardId, updates) => {
+                // Handle card updates
+                const card = cards.find(c => c.id === cardId);
+                if (card && onCardUpdate) {
+                  onCardUpdate({ ...card, ...updates });
+                }
+              }}
+              onScheduleCard={(card) => setScheduleModalCard(card)}
+            />
+          </div>
+        ) : viewMode === 'kanban' ? (
+          // Kanban View with dnd-kit
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex h-full gap-4 overflow-x-auto p-6">
+              {columns.map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  categories={categories}
+                  cardsByCategory={cardsByColumnAndCategory[column.id] || {}}
                   onCardUpdate={onCardUpdate}
                   onCardDelete={onCardDelete}
+                  onCardClick={handleCardClick}
                 />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+
+            {/* Drag Overlay - Shows a preview of the card being dragged */}
+            <DragOverlay>
+              {activeCard ? (
+                <div className="opacity-90 scale-105 shadow-2xl">
+                  <ResultCard
+                    card={activeCard}
+                    variant="default"
+                  />
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         ) : viewMode === 'grid' ? (
           // Grid View
           <div className="h-full overflow-y-auto p-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredCards.map((card) => (
+              {filteredCards.map((card, index) => (
                 <CardList
-                  key={card.id}
+                  key={card.id || `grid-${index}`}
                   cards={[card]}
                   columnId="grid"
                   onCardUpdate={onCardUpdate}
@@ -248,6 +480,23 @@ export function TripBoard({ tripId, cards = [], onCardUpdate, onCardDelete }: Tr
           </div>
         )}
       </div>
+
+      {/* Day Assignment Modal */}
+      <DayAssignmentModal
+        card={scheduleModalCard}
+        trip={trip}
+        isOpen={!!scheduleModalCard}
+        onClose={() => setScheduleModalCard(null)}
+        onAssign={handleDayAssignment}
+      />
+
+      {/* Card Detail Panel */}
+      <CardDetailPanel
+        card={selectedCard}
+        isOpen={!!selectedCard}
+        onClose={() => setSelectedCard(null)}
+        onCardUpdate={onCardUpdate}
+      />
     </div>
   );
 }

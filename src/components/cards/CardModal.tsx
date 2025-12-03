@@ -13,14 +13,20 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  DollarSign,
   Utensils,
   Hotel,
   Activity,
   Wifi,
   Coffee,
+  Info,
+  Image as ImageIcon,
+  Map as MapIcon,
+  MessageSquare,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MapView } from '@/components/map/MapView';
+import { PhotoGallery } from '@/components/gallery/PhotoGallery';
+import { ReviewsPanel } from '@/components/reviews/ReviewsPanel';
 
 interface CardModalProps {
   card: PlaceCard;
@@ -29,7 +35,10 @@ interface CardModalProps {
   onSave?: (card: PlaceCard) => void;
 }
 
+type TabType = 'overview' | 'photos' | 'map' | 'reviews';
+
 export function CardModal({ card, onClose, onAddToTrip, onSave }: CardModalProps) {
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
@@ -87,13 +96,42 @@ export function CardModal({ card, onClose, onAddToTrip, onSave }: CardModalProps
     }
   };
 
-  const priceDisplay = card.price_range
-    ? `$${card.price_range[0]}-${card.price_range[1]}/night`
-    : card.price_level
-    ? '$'.repeat(card.price_level)
-    : card.price
-    ? `$${card.price}`
-    : null;
+
+  // Mock reviews data (in production, fetch from API)
+  const mockReviews = [
+    {
+      id: '1',
+      author: 'Sarah Johnson',
+      rating: 5,
+      date: '2024-09-15',
+      text: 'Absolutely amazing experience! The location was perfect, staff was incredibly friendly, and the amenities exceeded our expectations. Would definitely recommend to anyone visiting the area.',
+      helpful_count: 24,
+    },
+    {
+      id: '2',
+      author: 'Michael Chen',
+      rating: 4,
+      date: '2024-08-22',
+      text: 'Great place overall. Very clean and well-maintained. The only minor issue was the noise from the street, but otherwise perfect.',
+      helpful_count: 12,
+    },
+    {
+      id: '3',
+      author: 'Emma Williams',
+      rating: 5,
+      date: '2024-07-10',
+      text: 'This place is a hidden gem! Everything was exactly as described. The attention to detail was impressive.',
+      helpful_count: 8,
+    },
+  ];
+
+  // Tabs configuration
+  const tabs = [
+    { id: 'overview' as TabType, label: 'Overview', icon: Info },
+    { id: 'photos' as TabType, label: 'Photos', icon: ImageIcon, show: card.photos.length > 0 },
+    { id: 'map' as TabType, label: 'Location', icon: MapIcon, show: !!card.coordinates },
+    { id: 'reviews' as TabType, label: 'Reviews', icon: MessageSquare, show: !!card.rating },
+  ].filter(tab => tab.show !== false);
 
   return (
     <AnimatePresence>
@@ -124,184 +162,186 @@ export function CardModal({ card, onClose, onAddToTrip, onSave }: CardModalProps
           </button>
 
           {/* Scrollable Content */}
-          <div className="max-h-[90vh] overflow-y-auto">
-            {/* Image Gallery */}
-            {card.photos && card.photos.length > 0 && (
-              <div className="relative h-96 bg-muted">
-                <img
-                  src={card.photos[currentImageIndex] || '/placeholder-location.jpg'}
-                  alt={card.name}
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = '/placeholder-location.jpg';
-                  }}
-                />
+          <div className="flex flex-col max-h-[90vh]">
+            {/* Header - Fixed */}
+            <div className="flex-shrink-0 border-b border-border/50 p-6 bg-card/50">
+              {/* Type Badge & Save Button */}
+              <div className="flex items-center justify-between mb-4">
+                <span className="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary capitalize">
+                  {getIcon()}
+                  {card.type}
+                </span>
+                <button
+                  onClick={handleSave}
+                  className={cn(
+                    'rounded-full p-3 transition-all duration-300',
+                    isSaved
+                      ? 'bg-primary text-white shadow-lg shadow-primary/50'
+                      : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                  )}
+                >
+                  <Bookmark className={cn('h-5 w-5', isSaved && 'fill-current')} />
+                </button>
+              </div>
 
-                {/* Image Navigation */}
-                {card.photos.length > 1 && (
-                  <>
-                    <button
-                      onClick={prevImage}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-md transition-all duration-300 hover:bg-black/70 hover:scale-110"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={nextImage}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-md transition-all duration-300 hover:bg-black/70 hover:scale-110"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
+              {/* Title */}
+              <h2 className="text-3xl font-bold text-foreground mb-4">{card.name}</h2>
 
-                    {/* Image Indicators */}
-                    <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
-                      {card.photos.map((_, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setCurrentImageIndex(i)}
-                          className={cn(
-                            'h-2 rounded-full transition-all duration-300',
-                            i === currentImageIndex
-                              ? 'w-8 bg-white'
-                              : 'w-2 bg-white/50 hover:bg-white/75'
-                          )}
-                        />
-                      ))}
+              {/* Rating, Reviews, Price */}
+              <div className="flex flex-wrap items-center gap-4">
+                {card.rating && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 px-3 py-1.5">
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      <span className="font-bold text-foreground">{card.rating.toFixed(1)}</span>
                     </div>
-                  </>
+                    {card.review_count && (
+                      <span className="text-sm text-muted-foreground">
+                        {card.review_count.toLocaleString()} reviews
+                      </span>
+                    )}
+                  </div>
                 )}
-
-                {/* Type Badge */}
-                <div className="absolute left-4 top-4">
-                  <span className="flex items-center gap-2 rounded-full bg-white/90 dark:bg-gray-800/90 px-4 py-2 text-sm font-semibold text-foreground backdrop-blur-md capitalize">
-                    {getIcon()}
-                    {card.type}
-                  </span>
-                </div>
               </div>
-            )}
+            </div>
 
-            {/* Content */}
-            <div className="p-8">
-              {/* Header */}
-              <div className="mb-6">
-                <div className="mb-4 flex items-start justify-between gap-4">
-                  <h2 className="text-3xl font-bold text-foreground">{card.name}</h2>
-                  <button
-                    onClick={handleSave}
-                    className={cn(
-                      'rounded-full p-3 transition-all duration-300',
-                      isSaved
-                        ? 'bg-primary text-white shadow-lg shadow-primary/50'
-                        : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary'
-                    )}
-                  >
-                    <Bookmark className={cn('h-5 w-5', isSaved && 'fill-current')} />
-                  </button>
-                </div>
-
-                {/* Rating & Price */}
-                <div className="flex flex-wrap items-center gap-4">
-                  {card.rating && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 px-3 py-1.5">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="font-bold text-foreground">{card.rating.toFixed(1)}</span>
-                      </div>
-                      {card.review_count && (
-                        <span className="text-sm text-muted-foreground">
-                          {card.review_count} reviews
-                        </span>
+            {/* Tab Navigation */}
+            <div className="flex-shrink-0 border-b border-border/50 bg-background">
+              <div className="flex gap-1 px-6">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={cn(
+                        'flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all duration-300 border-b-2',
+                        activeTab === tab.id
+                          ? 'text-primary border-primary'
+                          : 'text-muted-foreground border-transparent hover:text-foreground hover:border-border'
                       )}
-                    </div>
-                  )}
-                  {priceDisplay && (
-                    <div className="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5">
-                      <span className="font-bold text-primary">{priceDisplay}</span>
-                    </div>
-                  )}
-                </div>
+                    >
+                      <Icon className="h-4 w-4" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
               </div>
+            </div>
 
-              {/* Address */}
-              {card.address && (
-                <div className="mb-6 flex items-start gap-3 rounded-xl bg-muted/50 p-4">
-                  <MapPin className="h-5 w-5 flex-shrink-0 text-primary mt-0.5" />
-                  <p className="text-foreground/90">{card.address}</p>
-                </div>
-              )}
+            {/* Tab Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-8">
+              {activeTab === 'overview' && (
+                <div className="space-y-6">
+                  {/* Address */}
+                  {card.address && (
+                    <div className="flex items-start gap-3 rounded-xl bg-muted/50 p-4">
+                      <MapPin className="h-5 w-5 flex-shrink-0 text-primary mt-0.5" />
+                      <p className="text-foreground/90">{card.address}</p>
+                    </div>
+                  )}
 
-              {/* Type-specific Details */}
-              <div className="mb-6 space-y-4">
-                {/* Restaurant: Cuisine & Hours */}
-                {card.type === 'restaurant' && (
-                  <div className="space-y-3">
-                    {card.cuisine_type && (
-                      <div className="flex items-center gap-3">
-                        <Utensils className="h-5 w-5 text-muted-foreground" />
-                        <span className="text-foreground/90">{card.cuisine_type}</span>
+                  {/* Type-specific Details */}
+                  <div className="space-y-4">
+                    {/* Restaurant: Cuisine & Hours */}
+                    {card.type === 'restaurant' && (
+                      <div className="space-y-3">
+                        {card.cuisine_type && (
+                          <div className="flex items-center gap-3">
+                            <Utensils className="h-5 w-5 text-muted-foreground" />
+                            <span className="text-foreground/90">{card.cuisine_type}</span>
+                          </div>
+                        )}
+                        {card.opening_hours && (
+                          <div className="flex items-start gap-3">
+                            <Clock className="h-5 w-5 flex-shrink-0 text-muted-foreground mt-0.5" />
+                            <div className="text-sm text-foreground/80">
+                              {card.opening_hours.split(',').map((hour, i) => (
+                                <div key={i}>{hour.trim()}</div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
-                    {card.opening_hours && (
-                      <div className="flex items-start gap-3">
-                        <Clock className="h-5 w-5 flex-shrink-0 text-muted-foreground mt-0.5" />
-                        <div className="text-sm text-foreground/80">
-                          {card.opening_hours.split(',').map((hour, i) => (
-                            <div key={i}>{hour.trim()}</div>
+
+                    {/* Hotel: Amenities */}
+                    {card.type === 'hotel' && card.amenities && card.amenities.length > 0 && (
+                      <div>
+                        <h3 className="mb-3 font-semibold text-foreground">Amenities</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {card.amenities.map((amenity, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-sm font-medium text-foreground"
+                            >
+                              {amenity === 'WiFi' && <Wifi className="h-4 w-4" />}
+                              {amenity === 'Breakfast' && <Coffee className="h-4 w-4" />}
+                              {amenity}
+                            </span>
                           ))}
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
 
-                {/* Hotel: Amenities */}
-                {card.type === 'hotel' && card.amenities && card.amenities.length > 0 && (
-                  <div>
-                    <h3 className="mb-3 font-semibold text-foreground">Amenities</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {card.amenities.map((amenity, i) => (
-                        <span
-                          key={i}
-                          className="inline-flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-sm font-medium text-foreground"
-                        >
-                          {amenity === 'WiFi' && <Wifi className="h-4 w-4" />}
-                          {amenity === 'Breakfast' && <Coffee className="h-4 w-4" />}
-                          {amenity}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Activity: Duration & Price */}
-                {card.type === 'activity' && (
-                  <div className="flex flex-wrap gap-4">
-                    {card.duration && (
+                    {/* Activity: Duration */}
+                    {card.type === 'activity' && card.duration && (
                       <div className="flex items-center gap-2 rounded-full bg-muted px-4 py-2">
                         <Clock className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium text-foreground">{card.duration}</span>
                       </div>
                     )}
-                    {card.price && (
-                      <div className="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2">
-                        <DollarSign className="h-4 w-4 text-primary" />
-                        <span className="text-sm font-bold text-primary">${card.price}</span>
-                      </div>
-                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Description */}
-              {card.description && (
-                <div className="mb-6">
-                  <h3 className="mb-2 font-semibold text-foreground">About</h3>
-                  <p className="text-foreground/80 leading-relaxed">{card.description}</p>
+                  {/* Description */}
+                  {card.description && (
+                    <div>
+                      <h3 className="mb-2 font-semibold text-foreground">About</h3>
+                      <p className="text-foreground/80 leading-relaxed">{card.description}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Action Buttons */}
+              {activeTab === 'photos' && (
+                <PhotoGallery photos={card.photos} placeName={card.name} />
+              )}
+
+              {activeTab === 'map' && card.coordinates && (
+                <div className="space-y-4">
+                  <MapView
+                    places={[card]}
+                    center={card.coordinates}
+                    zoom={15}
+                    height="500px"
+                  />
+                  {card.address && (
+                    <div className="flex items-start gap-3 rounded-xl bg-muted/50 p-4">
+                      <MapPin className="h-5 w-5 flex-shrink-0 text-primary mt-0.5" />
+                      <p className="text-foreground/90">{card.address}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'reviews' && (
+                <ReviewsPanel
+                  reviews={mockReviews}
+                  averageRating={card.rating || 0}
+                  totalReviews={card.review_count || mockReviews.length}
+                  ratingBreakdown={{
+                    5: 45,
+                    4: 30,
+                    3: 15,
+                    2: 7,
+                    1: 3,
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Footer - Fixed */}
+            <div className="flex-shrink-0 border-t border-border/50 p-6 bg-card/50">
               <div className="flex gap-3">
                 <button
                   onClick={handleAddToTrip}

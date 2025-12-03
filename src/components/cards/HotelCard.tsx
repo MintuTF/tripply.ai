@@ -31,11 +31,6 @@ export function HotelCard({ card, onAddToTrip, onSave, onClick }: HotelCardProps
   };
 
   const mainImage = card.photos[0] || '/placeholder-hotel.jpg';
-  const priceDisplay = card.price_range
-    ? `$${card.price_range[0]}-${card.price_range[1]}/night`
-    : card.price_level
-    ? '$'.repeat(card.price_level)
-    : null;
 
   return (
     <motion.div
@@ -55,6 +50,8 @@ export function HotelCard({ card, onAddToTrip, onSave, onClick }: HotelCardProps
         <img
           src={mainImage}
           alt={card.name}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
           onError={(e) => {
             e.currentTarget.src = '/placeholder-hotel.jpg';
@@ -95,11 +92,6 @@ export function HotelCard({ card, onAddToTrip, onSave, onClick }: HotelCardProps
             <div className="flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-gray-800/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
               <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
               <span className="text-sm font-bold text-foreground">{card.rating.toFixed(1)}</span>
-            </div>
-          )}
-          {priceDisplay && (
-            <div className="rounded-full bg-white/95 dark:bg-gray-800/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
-              <span className="text-sm font-bold text-primary">{priceDisplay}</span>
             </div>
           )}
         </div>

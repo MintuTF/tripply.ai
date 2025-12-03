@@ -52,6 +52,8 @@ export function LocationCard({ card, onAddToTrip, onSave, onClick }: LocationCar
         <img
           src={mainImage}
           alt={card.name}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
           onError={(e) => {
             e.currentTarget.src = '/placeholder-location.jpg';
