@@ -54,6 +54,8 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  let user = null;
+
   if (supabaseUrl && supabaseKey) {
     // Create Supabase client and refresh session
     const supabase = createServerClient(
@@ -80,7 +82,18 @@ export async function middleware(request: NextRequest) {
     );
 
     // Refresh session if expired - required for Server Components
-    await supabase.auth.getUser();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    user = authUser;
+
+    // Auth-based redirects
+    const pathname = request.nextUrl.pathname;
+
+    // If user is authenticated and on landing page, redirect to /plan
+    if (user && pathname === '/') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/plan';
+      return NextResponse.redirect(url);
+    }
   }
 
   // Apply rate limiting to API routes
