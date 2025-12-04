@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card } from '@/types';
 import { ResultCard } from '@/components/cards/ResultCard';
 import { cn } from '@/lib/utils';
-import { MoreVertical, Trash2 } from 'lucide-react';
+import { MoreVertical, Trash2, Copy } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,6 +15,7 @@ interface SortableKanbanCardProps {
   onCardUpdate?: (card: Card) => void;
   onCardDelete?: (cardId: string) => void;
   onCardClick?: (card: Card) => void;
+  onCardDuplicate?: (card: Card) => void;
 }
 
 /**
@@ -27,6 +28,7 @@ export function SortableKanbanCard({
   onCardUpdate,
   onCardDelete,
   onCardClick,
+  onCardDuplicate,
 }: SortableKanbanCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -111,8 +113,12 @@ export function SortableKanbanCard({
           isDragging && 'opacity-50 scale-105 z-50'
         )}
       >
-        {/* Card Menu Button */}
-        <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100 card-menu-button">
+        {/* Card Menu Button - prevent drag events from interfering */}
+        <div
+          className="absolute right-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100 card-menu-button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -125,8 +131,24 @@ export function SortableKanbanCard({
 
           {/* Dropdown Menu */}
           {showMenu && (
-            <div className="absolute right-0 top-full mt-1 w-36 rounded-lg border bg-background shadow-lg">
+            <div
+              className="absolute right-0 top-full mt-1 w-36 rounded-lg border bg-background shadow-lg z-50"
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
               <div className="p-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onCardDuplicate?.(card);
+                    setShowMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
+                >
+                  <Copy className="h-3 w-3" />
+                  Duplicate
+                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

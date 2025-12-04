@@ -183,8 +183,29 @@ export async function searchPlaces(params: {
       };
     }
 
+    // Collect all results (first page)
+    let allResults = searchData.results || [];
+    console.log(`[Places] First page: ${allResults.length} results, next_page_token: ${!!searchData.next_page_token}`);
+
+    // Fetch second page if available (to get up to 40 results)
+    if (searchData.next_page_token) {
+      // Google requires a short delay before using next_page_token
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const nextPageUrl = `${PLACES_BASE_URL}/textsearch/json?pagetoken=${searchData.next_page_token}&key=${PLACES_API_KEY}`;
+      const nextPageResponse = await fetch(nextPageUrl);
+      const nextPageData = await nextPageResponse.json();
+
+      console.log(`[Places] Second page status: ${nextPageData.status}, results: ${nextPageData.results?.length || 0}`);
+
+      if (nextPageData.status === 'OK' && nextPageData.results) {
+        allResults = [...allResults, ...nextPageData.results];
+      }
+    }
+    console.log(`[Places] Total results after pagination: ${allResults.length}`);
+
     // Parse and filter results
-    let places: PlaceResult[] = (searchData.results || []).map((place: any) => ({
+    let places: PlaceResult[] = (allResults).map((place: any) => ({
       place_id: place.place_id,
       name: place.name,
       address: place.formatted_address || '',
@@ -227,8 +248,8 @@ export async function searchPlaces(params: {
       places = places.filter((p) => p.price_level && price_level.includes(p.price_level));
     }
 
-    // Limit to top 20 results
-    places = places.slice(0, 20);
+    // Limit to top 40 results (map shows all, list shows 20 initially with "See More")
+    places = places.slice(0, 40);
 
     return {
       success: true,

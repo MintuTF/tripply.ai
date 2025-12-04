@@ -29,7 +29,7 @@ export function ExportMenu({ trip, cards }: ExportMenuProps) {
   const handleExportPDF = async () => {
     setLoading('pdf');
     try {
-      exportToPDF(trip, cards);
+      await exportToPDF(trip, cards);
     } catch (error) {
       console.error('PDF export failed:', error);
     } finally {
@@ -185,7 +185,7 @@ export function ExportMenu({ trip, cards }: ExportMenuProps) {
               {/* Footer */}
               <div className="border-t border-border p-2">
                 <p className="text-xs text-center text-muted-foreground">
-                  {cards.filter(c => c.day).length} stops scheduled
+                  {cards.filter(c => c.labels?.includes('confirmed')).length} confirmed items
                 </p>
               </div>
             </motion.div>

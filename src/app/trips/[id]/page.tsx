@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { TripBoard } from '@/components/board/TripBoard';
 import { CompareDrawer } from '@/components/board/CompareDrawer';
 import { ExportMenu } from '@/components/trip/ExportMenu';
+import { PrintableItinerary } from '@/components/trip/PrintableItinerary';
 import { Card, Trip } from '@/types';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { MapView } from '@/components/board/MapView';
@@ -160,6 +161,57 @@ export default function TripPage({ params }: PageProps) {
     }
   };
 
+  const handleCardDuplicate = async (card: Card) => {
+    try {
+      // Migrate old 'booked' label to 'confirmed' if present
+      const migratedLabels = (card.labels || []).map(l => l === 'booked' ? 'confirmed' : l);
+
+      // Create duplicate card data (copy content, place in same column as original)
+      const duplicateCardData = {
+        trip_id: resolvedParams.id,
+        type: card.type,
+        payload_json: card.payload_json,
+        labels: migratedLabels, // Keep same column as original card (with migrated labels)
+        favorite: false,
+        day: card.day, // Keep same day if assigned
+        time_slot: card.time_slot,
+        order: card.order !== undefined ? card.order + 0.5 : undefined, // Place after original
+      };
+
+      // Save to database
+      const response = await fetch('/api/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(duplicateCardData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Duplicate API error:', response.status, errorData);
+        throw new Error(errorData.error || 'Failed to duplicate card');
+      }
+
+      const data = await response.json();
+
+      if (!data.card) {
+        throw new Error('No card returned from API');
+      }
+
+      const savedCard = {
+        ...data.card,
+        labels: data.card.labels || ['considering'], // Ensure labels is always an array
+      };
+
+      // Add to local state
+      setCards(prev => [...prev, savedCard]);
+      const payload = card.payload_json as any;
+      setToastMessage(`"${payload.name || payload.title || 'Card'}" duplicated`);
+    } catch (err) {
+      console.error('Error duplicating card:', err);
+      setToastMessage('Failed to duplicate card');
+    }
+  };
+
   const handleAddCard = async (newCard: Card) => {
     // Check if card already exists
     const exists = cards.some((c) => c.id === newCard.id);
@@ -168,30 +220,33 @@ export default function TripPage({ params }: PageProps) {
       return;
     }
 
-    // Optimistic update
-    setCards([...cards, newCard]);
+    // Add to local state
+    setCards(prev => [...prev, newCard]);
     const payload = newCard.payload_json as any;
     setToastMessage(`"${payload.name}" added to Considering`);
 
-    // Sync to database
-    try {
-      await fetch('/api/cards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trip_id: resolvedParams.id,
-          type: newCard.type,
-          payload_json: newCard.payload_json,
-          labels: newCard.labels || ['considering'],
-          favorite: newCard.favorite || false,
-          day: newCard.day,
-          time_slot: newCard.time_slot,
-          order: newCard.order,
-        }),
-      });
-    } catch (err) {
-      console.error('Error adding card:', err);
-      setToastMessage('Failed to save card');
+    // Only sync to database if card doesn't have a real ID (temp cards from guest mode)
+    // Cards with real IDs were already saved by the component that created them
+    if (newCard.id.startsWith('temp-')) {
+      try {
+        await fetch('/api/cards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trip_id: resolvedParams.id,
+            type: newCard.type,
+            payload_json: newCard.payload_json,
+            labels: newCard.labels || ['considering'],
+            favorite: newCard.favorite || false,
+            day: newCard.day,
+            time_slot: newCard.time_slot,
+            order: newCard.order,
+          }),
+        });
+      } catch (err) {
+        console.error('Error adding card:', err);
+        setToastMessage('Failed to save card');
+      }
     }
   };
 
@@ -402,8 +457,10 @@ export default function TripPage({ params }: PageProps) {
             cards={cards}
             onCardUpdate={handleCardUpdate}
             onCardDelete={handleCardDelete}
+            onCardDuplicate={handleCardDuplicate}
             onTripUpdate={handleTripUpdate}
             onArchive={handleArchive}
+            onAddCard={handleAddCard}
           />
         ) : activeView === 'map' ? (
           <div className="flex h-full">
@@ -495,6 +552,9 @@ export default function TripPage({ params }: PageProps) {
         isVisible={!!toastMessage}
         onClose={() => setToastMessage(null)}
       />
+
+      {/* Printable Itinerary (hidden, only shown when printing) */}
+      <PrintableItinerary trip={trip} cards={cards} />
     </div>
   );
 }

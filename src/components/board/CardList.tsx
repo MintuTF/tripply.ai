@@ -67,7 +67,7 @@ export function CardList({
 
     if (cardToUpdate) {
       // Update labels array - remove old column labels, add new one
-      const columnIds = ['considering', 'shortlist', 'booked', 'dismissed'];
+      const columnIds = ['considering', 'shortlist', 'confirmed', 'dismissed'];
       const newLabels = cardToUpdate.labels.filter((l: string) => !columnIds.includes(l));
       newLabels.push(columnId);
 

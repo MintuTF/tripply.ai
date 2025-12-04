@@ -68,6 +68,9 @@ export function PlacesSearchSidebar({
   const [allFetchedCards, setAllFetchedCards] = useState<Card[]>([]);
   const [isFetchingAll, setIsFetchingAll] = useState(false);
 
+  // Pagination: show 20 items initially, with "See More" to reveal rest
+  const [visibleCount, setVisibleCount] = useState(20);
+
   console.log('[PlacesSearchSidebar] Render:', { confirmedLocation, useRealTimeData, cardsCount: cards.length });
 
   // Local filtering for saved cards
@@ -141,6 +144,14 @@ export function PlacesSearchSidebar({
   const displayCards = filteredCards.filter((card, index, self) =>
     index === self.findIndex((c) => c.id === card.id)
   );
+
+  // Slice for list display only (map gets all displayCards via onSearchResultsChange)
+  const visibleCards = displayCards.slice(0, visibleCount);
+
+  // Reset visible count when filters or location changes
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [confirmedLocation, typeFilter, searchQuery, filters.rating]);
 
   // Handle autocomplete selection (confirmed selection)
   const handleLocationSelect = (prediction: AutocompletePrediction) => {
@@ -442,7 +453,7 @@ export function PlacesSearchSidebar({
               exit={{ opacity: 0 }}
               className="p-4 space-y-3"
             >
-              {displayCards.map((card, index) => (
+              {visibleCards.map((card, index) => (
                 <motion.div
                   key={card.id || `place-${index}`}
                   initial={{ opacity: 0, x: -20 }}
@@ -467,6 +478,18 @@ export function PlacesSearchSidebar({
                   />
                 </motion.div>
               ))}
+
+              {/* See More button - show when there are more results to display */}
+              {displayCards.length > visibleCount && (
+                <motion.button
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  onClick={() => setVisibleCount(prev => Math.min(prev + 20, displayCards.length))}
+                  className="w-full py-3 text-primary font-medium hover:bg-accent/50 rounded-lg transition-colors border-2 border-dashed border-border hover:border-primary"
+                >
+                  See More ({displayCards.length - visibleCount} more)
+                </motion.button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

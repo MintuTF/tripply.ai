@@ -13,7 +13,6 @@ import {
   Plane
 } from 'lucide-react';
 import { format, isAfter, isBefore } from 'date-fns';
-import { DayPicker, DateRange } from 'react-day-picker';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface TripInfoHeaderProps {
@@ -71,27 +70,18 @@ function calculateEffectiveStatus(trip: Trip): TripStatus {
 
 export function TripInfoHeader({ trip, onTripUpdate, onArchive, isDraft, isLoggedOut }: TripInfoHeaderProps) {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange>({
-    from: new Date(trip.dates.start),
-    to: new Date(trip.dates.end),
-  });
   const [isSaving, setIsSaving] = useState(false);
 
   const statusDropdownRef = useRef<HTMLDivElement>(null);
-  const datePickerRef = useRef<HTMLDivElement>(null);
 
   const effectiveStatus = calculateEffectiveStatus(trip);
   const statusConfig = STATUS_CONFIG[effectiveStatus];
 
-  // Close dropdowns on outside click
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
         setShowStatusDropdown(false);
-      }
-      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
-        setShowDatePicker(false);
       }
     };
 
@@ -104,21 +94,6 @@ export function TripInfoHeader({ trip, onTripUpdate, onArchive, isDraft, isLogge
     if (newStatus !== trip.status) {
       setIsSaving(true);
       await onTripUpdate({ status: newStatus });
-      setIsSaving(false);
-    }
-  };
-
-  const handleDateChange = async (range: DateRange | undefined) => {
-    if (range?.from && range?.to) {
-      setDateRange(range);
-      setShowDatePicker(false);
-      setIsSaving(true);
-      await onTripUpdate({
-        dates: {
-          start: range.from.toISOString(),
-          end: range.to.toISOString(),
-        },
-      });
       setIsSaving(false);
     }
   };
@@ -225,76 +200,17 @@ export function TripInfoHeader({ trip, onTripUpdate, onArchive, isDraft, isLogge
             </div>
           )}
 
-          {/* Date range - editable (hidden for logged-out users) */}
+          {/* Date range - read-only display (hidden for logged-out users) */}
           {!isLoggedOut && (
-            <div className="relative" ref={datePickerRef}>
-              <button
-                onClick={() => setShowDatePicker(!showDatePicker)}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 rounded-lg',
-                  'border-2 border-border/50 bg-card/50 backdrop-blur-sm',
-                  'text-sm font-medium transition-all duration-200',
-                  'hover:border-primary/50 hover:shadow-md'
-                )}
-              >
-                <Calendar className="h-4 w-4 text-primary" />
-                {formatDateRange()}
-              </button>
-
-              <AnimatePresence>
-                {showDatePicker && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="absolute top-full right-0 mt-2 bg-card rounded-xl border shadow-2xl z-50 p-4"
-                  >
-                    <DayPicker
-                      mode="range"
-                      selected={dateRange}
-                      onSelect={handleDateChange}
-                      numberOfMonths={1}
-                      classNames={{
-                        months: 'flex flex-col',
-                        month: 'space-y-4',
-                        month_caption: 'flex justify-center pt-1 relative items-center mb-4',
-                        caption_label: 'text-sm font-medium',
-                        nav: 'space-x-1 flex items-center',
-                        button_previous: cn(
-                          'absolute left-1 h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
-                          'inline-flex items-center justify-center rounded-md',
-                          'hover:bg-accent'
-                        ),
-                        button_next: cn(
-                          'absolute right-1 h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
-                          'inline-flex items-center justify-center rounded-md',
-                          'hover:bg-accent'
-                        ),
-                        month_grid: 'w-full border-collapse',
-                        weekdays: 'flex',
-                        weekday: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-center',
-                        week: 'flex w-full mt-2',
-                        day: 'text-center text-sm p-0 relative h-9 w-9',
-                        day_button: cn(
-                          'h-9 w-9 p-0 font-normal',
-                          'inline-flex items-center justify-center rounded-md',
-                          'hover:bg-accent hover:text-accent-foreground',
-                          'focus:outline-none focus:ring-2 focus:ring-primary',
-                          'aria-selected:opacity-100'
-                        ),
-                        selected: 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground rounded-md',
-                        today: 'bg-accent text-accent-foreground rounded-md',
-                        outside: 'text-muted-foreground opacity-50',
-                        disabled: 'text-muted-foreground opacity-50 cursor-not-allowed',
-                        range_middle: 'bg-accent text-accent-foreground rounded-none aria-selected:bg-accent aria-selected:text-accent-foreground',
-                        range_start: 'bg-primary text-primary-foreground rounded-l-md rounded-r-none',
-                        range_end: 'bg-primary text-primary-foreground rounded-r-md rounded-l-none',
-                        hidden: 'invisible',
-                      }}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div
+              className={cn(
+                'flex items-center gap-2 px-3 py-1.5 rounded-lg',
+                'border-2 border-border/50 bg-card/50 backdrop-blur-sm',
+                'text-sm font-medium'
+              )}
+            >
+              <Calendar className="h-4 w-4 text-primary" />
+              {formatDateRange()}
             </div>
           )}
 

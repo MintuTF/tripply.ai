@@ -274,3 +274,115 @@
 .animate-glow {
   animation: glow 2s ease-in-out infinite;
 }
+
+/* ===== PRINT STYLES ===== */
+@media print {
+  /* Hide everything except printable content */
+  body > *:not(.print-container) {
+    visibility: hidden;
+  }
+
+  /* Show the print-itinerary component */
+  .print-itinerary {
+    display: block !important;
+    visibility: visible !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Page setup */
+  @page {
+    margin: 1.5cm;
+    size: A4 portrait;
+  }
+
+  /* Prevent breaks inside cards and sections */
+  .print-section {
+    page-break-inside: avoid;
+  }
+
+  .print-card {
+    page-break-inside: avoid;
+  }
+
+  /* Force colors to print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Hide non-essential elements */
+  header:not(.print-itinerary header),
+  nav,
+  footer:not(.print-itinerary footer),
+  .no-print,
+  button,
+  [role="dialog"],
+  [role="menu"] {
+    display: none !important;
+  }
+
+  /* Ensure images print properly */
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  /* Timeline styling for print */
+  .print-itinerary h1 {
+    font-size: 24pt !important;
+    margin-bottom: 8pt !important;
+    color: #1a1a1a !important;
+  }
+
+  .print-itinerary h2 {
+    font-size: 14pt !important;
+    background-color: #58a6c1 !important;
+    color: white !important;
+    padding: 8px 16px !important;
+    border-radius: 4px !important;
+    margin-bottom: 16px !important;
+  }
+
+  .print-itinerary h3 {
+    font-size: 12pt !important;
+    color: #1a1a1a !important;
+  }
+
+  /* Ensure timeline elements print */
+  .print-itinerary .bg-teal-500 {
+    background-color: #58a6c1 !important;
+  }
+
+  .print-itinerary .text-teal-500,
+  .print-itinerary .text-teal-600 {
+    color: #58a6c1 !important;
+  }
+
+  .print-itinerary .bg-gray-50 {
+    background-color: #f9fafb !important;
+  }
+
+  .print-itinerary .bg-gray-200 {
+    background-color: #e5e7eb !important;
+  }
+
+  /* Print thumbnail sizing */
+  .print-itinerary img {
+    width: 60px !important;
+    height: 60px !important;
+    object-fit: cover !important;
+    border-radius: 8px !important;
+  }
+
+  /* Link styling for print */
+  a {
+    text-decoration: none !important;
+    color: inherit !important;
+  }
+}

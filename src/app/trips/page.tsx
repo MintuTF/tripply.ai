@@ -24,7 +24,9 @@ import {
   Archive,
   Check,
   Clock,
+  Trash2,
 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import { format, isAfter, isBefore } from 'date-fns';
 
@@ -39,6 +41,7 @@ interface TripSectionProps {
   viewMode: ViewMode;
   getEffectiveStatus: (trip: Trip) => TripStatus;
   onStatusUpdate: (tripId: string, status: TripStatus) => void;
+  onDelete: (trip: Trip) => void;
   showReopenButton?: boolean;
 }
 
@@ -49,6 +52,7 @@ function TripSection({
   viewMode,
   getEffectiveStatus,
   onStatusUpdate,
+  onDelete,
   showReopenButton,
 }: TripSectionProps) {
   if (trips.length === 0) return null;
@@ -134,9 +138,9 @@ function TripSection({
                   </div>
                 </Link>
 
-                {/* Reopen Button */}
-                {showReopenButton && (
-                  <div className="px-5 pb-4">
+                {/* Action Buttons */}
+                <div className="px-5 pb-4 flex items-center gap-4">
+                  {showReopenButton && (
                     <button
                       onClick={(e) => {
                         e.preventDefault();
@@ -147,8 +151,19 @@ function TripSection({
                       <RotateCcw className="h-4 w-4" />
                       Reopen Trip
                     </button>
-                  </div>
-                )}
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onDelete(trip);
+                    }}
+                    className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 transition-colors ml-auto"
+                    title="Delete trip"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -216,16 +231,25 @@ function TripSection({
                   </div>
                 </Link>
 
-                {/* Reopen Button */}
-                {showReopenButton && (
+                {/* Action Buttons */}
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {showReopenButton && (
+                    <button
+                      onClick={() => onStatusUpdate(trip.id, 'planning')}
+                      className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Reopen
+                    </button>
+                  )}
                   <button
-                    onClick={() => onStatusUpdate(trip.id, 'planning')}
-                    className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors flex-shrink-0"
+                    onClick={() => onDelete(trip)}
+                    className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 transition-colors"
+                    title="Delete trip"
                   >
-                    <RotateCcw className="h-4 w-4" />
-                    Reopen
+                    <Trash2 className="h-4 w-4" />
                   </button>
-                )}
+                </div>
               </div>
             );
           })}
@@ -246,6 +270,7 @@ export default function TripsPage() {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [showCompleted, setShowCompleted] = useState(true);
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -364,6 +389,26 @@ export default function TripsPage() {
       }
     } catch (err) {
       console.error('Failed to update trip status:', err);
+    }
+  };
+
+  // Handle trip deletion
+  const handleDeleteTrip = async () => {
+    if (!tripToDelete) return;
+
+    try {
+      const response = await fetch(`/api/trips/${tripToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setTrips((prev) => prev.filter((t) => t.id !== tripToDelete.id));
+        setTripToDelete(null);
+      } else {
+        console.error('Failed to delete trip');
+      }
+    } catch (err) {
+      console.error('Failed to delete trip:', err);
     }
   };
 
@@ -575,6 +620,7 @@ export default function TripsPage() {
                   viewMode={viewMode}
                   getEffectiveStatus={getEffectiveStatus}
                   onStatusUpdate={handleStatusUpdate}
+                  onDelete={setTripToDelete}
                 />
               )}
 
@@ -608,6 +654,7 @@ export default function TripsPage() {
                       viewMode={viewMode}
                       getEffectiveStatus={getEffectiveStatus}
                       onStatusUpdate={handleStatusUpdate}
+                      onDelete={setTripToDelete}
                       showReopenButton
                     />
                   )}
@@ -644,6 +691,7 @@ export default function TripsPage() {
                       viewMode={viewMode}
                       getEffectiveStatus={getEffectiveStatus}
                       onStatusUpdate={handleStatusUpdate}
+                      onDelete={setTripToDelete}
                       showReopenButton
                     />
                   )}
@@ -662,6 +710,17 @@ export default function TripsPage() {
           </>
         )}
       </main>
+
+      {/* Delete Trip Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!tripToDelete}
+        title="Delete Trip"
+        message={`Are you sure you want to delete "${tripToDelete?.title}"? This will permanently remove the trip and all its cards. This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleDeleteTrip}
+        onCancel={() => setTripToDelete(null)}
+      />
     </div>
   );
 }

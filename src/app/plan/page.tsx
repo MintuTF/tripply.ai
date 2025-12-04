@@ -64,6 +64,21 @@ export default function PlanPage() {
     setToastMessage(`"${payload.name}" added to Considering`);
   };
 
+  const handleCardDuplicate = (card: Card) => {
+    // Create a duplicate card with a new temporary ID
+    const duplicateCard: Card = {
+      ...card,
+      id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      favorite: false,
+      order: card.order !== undefined ? card.order + 0.5 : undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    addCard(duplicateCard);
+    const payload = card.payload_json as any;
+    setToastMessage(`"${payload.name || payload.title || 'Card'}" duplicated`);
+  };
+
   const handleCompare = (selectedCards: Card[]) => {
     setCompareCards(selectedCards);
   };
@@ -257,7 +272,9 @@ export default function PlanPage() {
             cards={cards}
             onCardUpdate={updateCard}
             onCardDelete={deleteCard}
+            onCardDuplicate={handleCardDuplicate}
             isLoggedOut={!user}
+            onAddCard={handleAddCard}
           />
         ) : activeView === 'map' ? (
           <div className="flex h-full">

@@ -1,10 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { Card } from '@/types';
 import { cn } from '@/lib/utils';
-import { Star, Heart, ExternalLink, Pin, MoreVertical } from 'lucide-react';
-import { getLabelConfig } from '@/components/board/CardLabels';
 
 interface ResultCardProps {
   card: Card;
@@ -15,193 +12,128 @@ interface ResultCardProps {
 }
 
 /**
+ * Convert price level (1-4) to $ symbols
+ */
+function getPriceSymbols(level: number | undefined): string {
+  if (!level) return '';
+  return '$'.repeat(Math.min(Math.max(level, 1), 4));
+}
+
+/**
+ * Extract city and country from address or use provided city/country fields
+ */
+function getLocation(data: Record<string, unknown>): string {
+  if (data.city && data.country) {
+    return `${data.city}, ${data.country}`;
+  }
+  if (data.address && typeof data.address === 'string') {
+    // Try to extract city, country from address (last two parts)
+    const parts = data.address.split(',').map((p: string) => p.trim());
+    if (parts.length >= 2) {
+      return `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
+    }
+    return data.address;
+  }
+  return '';
+}
+
+/**
+ * Get the type/category info for the card (cuisine type, activity type, etc.)
+ */
+function getTypeInfo(data: Record<string, unknown>, cardType: string): string | null {
+  // Restaurant: cuisine_type
+  if (data.cuisine_type) return data.cuisine_type as string;
+  // Activity/Spot: type
+  if (data.type && cardType !== 'hotel') return data.type as string;
+  return null;
+}
+
+/**
  * ResultCard - Universal card component for displaying search results
- * Used across stays, places, restaurants, etc.
+ * Horizontal layout: image thumbnail on left, content on right
  */
 export function ResultCard({
   card,
-  onSave,
-  onCompare,
-  onPin,
   variant = 'default'
 }: ResultCardProps) {
-  const [isFavorited, setIsFavorited] = useState(card.favorite || false);
-  const [isPinned, setIsPinned] = useState(false);
-
   const data = typeof card.payload_json === 'string' ? JSON.parse(card.payload_json) : card.payload_json;
 
-  const handleFavorite = () => {
-    setIsFavorited(!isFavorited);
-    onSave?.(card);
-  };
+  const name = data.name || data.title || 'Untitled';
+  const location = getLocation(data);
+  const priceLevel = data.price_level as number | undefined;
+  const priceRange = data.price_range as [number, number] | undefined;
+  const typeInfo = getTypeInfo(data, card.type);
+  const description = data.description || data.notes;
+  const photos = data.photos as string[] | undefined;
+  const hasPhoto = photos && photos.length > 0;
 
-  const handlePin = () => {
-    setIsPinned(!isPinned);
-    onPin?.(card);
-  };
+  // Build the price/type line
+  let priceTypeText = '';
+  if (priceLevel) {
+    priceTypeText = getPriceSymbols(priceLevel);
+  } else if (priceRange && priceRange[0] > 0) {
+    // For hotels, estimate price level from range
+    const avgPrice = (priceRange[0] + priceRange[1]) / 2;
+    if (avgPrice < 100) priceTypeText = '$';
+    else if (avgPrice < 200) priceTypeText = '$$';
+    else if (avgPrice < 400) priceTypeText = '$$$';
+    else priceTypeText = '$$$$';
+  }
+  if (typeInfo) {
+    priceTypeText = priceTypeText ? `${priceTypeText}    ${typeInfo}` : typeInfo;
+  }
 
   return (
     <div
       className={cn(
-        'group relative rounded-2xl border-2 bg-card transition-all duration-300 hover-lift',
-        'border-border/50 hover:border-primary/30',
-        'shadow-sm hover:shadow-depth',
-        isPinned && 'ring-2 ring-primary shadow-glow',
-        variant === 'compact' && 'p-3',
-        variant === 'default' && 'p-4',
-        variant === 'detailed' && 'p-6',
-        'backdrop-blur-sm'
+        'group relative rounded-2xl border bg-card transition-all duration-200',
+        'border-border/50 hover:border-border',
+        'shadow-sm hover:shadow-md',
+        'flex flex-row gap-3',
+        variant === 'compact' && 'p-2',
+        variant === 'default' && 'p-3',
+        variant === 'detailed' && 'p-4'
       )}
     >
-      {/* Image */}
-      {data.image_url && (
-        <div className="relative mb-3 overflow-hidden rounded-xl">
+      {/* Image Thumbnail */}
+      {hasPhoto && (
+        <div className="w-20 h-20 flex-shrink-0 overflow-hidden rounded-xl bg-muted">
           <img
-            src={data.image_url}
-            alt={data.name || data.title}
-            className="h-48 w-full object-cover transition-transform duration-500 group-hover:scale-110"
+            src={photos[0]}
+            alt={name}
+            className="w-full h-full object-cover"
           />
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-          {/* Quick Actions Overlay */}
-          <div className="absolute right-2 top-2 flex gap-2 opacity-0 transition-all duration-300 group-hover:opacity-100">
-            <button
-              onClick={handleFavorite}
-              className={cn(
-                'rounded-full p-2.5 shadow-lg backdrop-blur-md transition-all duration-300',
-                'hover:scale-110',
-                isFavorited
-                  ? 'bg-red-500 text-white shadow-red-500/50'
-                  : 'bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-red-900/30'
-              )}
-            >
-              <Heart className={cn('h-4 w-4', isFavorited && 'fill-current')} />
-            </button>
-            <button
-              onClick={handlePin}
-              className={cn(
-                'rounded-full p-2.5 shadow-lg backdrop-blur-md transition-all duration-300',
-                'hover:scale-110',
-                isPinned
-                  ? 'bg-primary text-white shadow-primary/50'
-                  : 'bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30'
-              )}
-            >
-              <Pin className={cn('h-4 w-4', isPinned && 'fill-current')} />
-            </button>
-          </div>
         </div>
       )}
 
       {/* Content */}
-      <div className="space-y-2">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1">
-            <h3 className="font-semibold text-foreground line-clamp-1">
-              {data.name || data.title}
-            </h3>
-            {data.address && (
-              <p className="text-sm text-muted-foreground line-clamp-1">
-                {data.address}
-              </p>
-            )}
-          </div>
-          <button className="text-muted-foreground hover:text-foreground">
-            <MoreVertical className="h-4 w-4" />
-          </button>
-        </div>
+      <div className="flex-1 flex flex-col justify-center min-w-0 gap-0.5">
+        {/* Name */}
+        <h3 className="font-semibold text-foreground truncate text-sm">
+          {name}
+        </h3>
 
-        {/* Rating */}
-        {data.rating && (
-          <div className="flex items-center gap-1 text-sm">
-            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            <span className="font-medium">{data.rating}</span>
-            {data.review_count && (
-              <span className="text-muted-foreground">({data.review_count})</span>
-            )}
-          </div>
-        )}
-
-        {/* Description */}
-        {variant !== 'compact' && data.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {data.description}
+        {/* Location */}
+        {location && (
+          <p className="text-xs text-muted-foreground truncate">
+            {location}
           </p>
         )}
 
-        {/* Tags */}
-        {variant === 'detailed' && data.tags && Array.isArray(data.tags) && (
-          <div className="flex flex-wrap gap-1">
-            {data.tags.slice(0, 4).map((tag: string, i: number) => (
-              <span
-                key={i}
-                className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+        {/* Price & Type */}
+        {priceTypeText && (
+          <p className="text-xs text-muted-foreground">
+            {priceTypeText}
+          </p>
         )}
 
-        {/* User Labels */}
-        {(() => {
-          const statusLabels = ['considering', 'shortlist', 'booked', 'dismissed'];
-          const displayLabels = (card.labels || []).filter(l => !statusLabels.includes(l));
-
-          if (displayLabels.length === 0) return null;
-
-          return (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {displayLabels.slice(0, 3).map((labelId) => {
-                const config = getLabelConfig(labelId, card.type);
-                if (!config) return null;
-                return (
-                  <span
-                    key={labelId}
-                    className={cn(
-                      'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-white',
-                      config.color
-                    )}
-                  >
-                    {config.label}
-                  </span>
-                );
-              })}
-              {displayLabels.length > 3 && (
-                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">
-                  +{displayLabels.length - 3} more
-                </span>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Actions */}
-        {variant === 'detailed' && (
-          <div className="flex gap-3 pt-3">
-            <button
-              onClick={() => onCompare?.(card)}
-              className="flex-1 rounded-xl border-2 border-border/50 bg-card px-4 py-2.5 text-sm font-semibold transition-all duration-300 hover:border-primary/50 hover:bg-primary/5 hover:shadow-md"
-            >
-              Compare
-            </button>
-            {data.url && (
-              <a
-                href={data.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-xl gradient-primary px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105"
-              >
-                <ExternalLink className="h-4 w-4" />
-                View
-              </a>
-            )}
-          </div>
+        {/* Description */}
+        {variant !== 'compact' && description && (
+          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+            {description}
+          </p>
         )}
       </div>
-
     </div>
   );
 }

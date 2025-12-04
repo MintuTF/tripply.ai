@@ -92,7 +92,29 @@ export function TripProvider({ children }: TripProviderProps) {
   // Auth modal state
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showCreateTripModal, setShowCreateTripModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState<'save' | 'share' | null>(null);
+
+  // Initialize pendingAction from localStorage to survive auth redirects
+  const [pendingActionState, setPendingActionState] = useState<'save' | 'share' | null>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('voyagr_pending_action');
+      if (stored === 'save' || stored === 'share') {
+        return stored;
+      }
+    }
+    return null;
+  });
+
+  // Wrapper to sync pendingAction to localStorage
+  const setPendingAction = useCallback((action: 'save' | 'share' | null) => {
+    setPendingActionState(action);
+    if (typeof window !== 'undefined') {
+      if (action) {
+        localStorage.setItem('voyagr_pending_action', action);
+      } else {
+        localStorage.removeItem('voyagr_pending_action');
+      }
+    }
+  }, []);
 
   // Hydrate state from localStorage on mount (only once)
   useEffect(() => {
@@ -251,12 +273,12 @@ export function TripProvider({ children }: TripProviderProps) {
 
   // Handle pending action after sign-in
   useEffect(() => {
-    if (user && pendingAction === 'save') {
+    if (user && pendingActionState === 'save') {
       // After sign-in, show the create trip modal instead of auto-saving
       setShowCreateTripModal(true);
-      setPendingAction(null);
+      setPendingAction(null); // This also clears localStorage
     }
-  }, [user, pendingAction]);
+  }, [user, pendingActionState, setPendingAction]);
 
   const value: TripContextType = {
     cards,
@@ -276,7 +298,7 @@ export function TripProvider({ children }: TripProviderProps) {
     setShowSignInModal,
     showCreateTripModal,
     setShowCreateTripModal,
-    pendingAction,
+    pendingAction: pendingActionState,
     setPendingAction,
   };
 

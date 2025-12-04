@@ -174,7 +174,7 @@ export function CardLabels({ cardType, selectedLabels, onLabelsChange }: CardLab
   };
 
   // Filter out status labels (considering, shortlist, booked, dismissed) from display
-  const statusLabels = ['considering', 'shortlist', 'booked', 'dismissed'];
+  const statusLabels = ['considering', 'shortlist', 'confirmed', 'dismissed'];
   const displayLabels = selectedLabels.filter((l) => !statusLabels.includes(l));
 
   return (

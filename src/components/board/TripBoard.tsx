@@ -11,7 +11,7 @@ import { BudgetWidget } from '@/components/budget/BudgetWidget';
 import { BudgetBreakdown } from '@/components/budget/BudgetBreakdown';
 import { ResultCard } from '@/components/cards/ResultCard';
 import { cn } from '@/lib/utils';
-import { Search, Grid, List, LayoutGrid, Calendar, Wallet, Hotel, Utensils, Compass } from 'lucide-react';
+import { Search, Grid, List, LayoutGrid, Calendar, Wallet, Hotel, Utensils, Compass, Sparkles } from 'lucide-react';
 import { TripInfoHeader } from '@/components/trip/TripInfoHeader';
 import {
   DndContext,
@@ -25,6 +25,7 @@ import {
   DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
+import { AskAIModal } from './AskAIModal';
 
 interface TripBoardProps {
   tripId: string;
@@ -32,16 +33,18 @@ interface TripBoardProps {
   cards?: Card[];
   onCardUpdate?: (card: Card) => void;
   onCardDelete?: (cardId: string) => void;
+  onCardDuplicate?: (card: Card) => void;
   onTripUpdate?: (updates: Partial<Trip>) => Promise<void>;
   onArchive?: () => void;
   isLoggedOut?: boolean;
+  onAddCard?: (card: Card) => void;  // For local card adding (guest mode)
 }
 
 /**
  * TripBoard - Kanban-style board for organizing saved cards
  * Inspired by Notion and Linear's card organization
  */
-export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete, onTripUpdate, onArchive, isLoggedOut }: TripBoardProps) {
+export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete, onCardDuplicate, onTripUpdate, onArchive, isLoggedOut, onAddCard }: TripBoardProps) {
   const [viewMode, setViewMode] = useState<'kanban' | 'grid' | 'list' | 'itinerary' | 'budget'>('kanban');
   const [totalBudget, setTotalBudget] = useState<number | undefined>(trip.budget_range ? trip.budget_range[1] : undefined);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +52,9 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
 
   // Card detail panel state
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+
+  // Ask AI modal state
+  const [showAskAI, setShowAskAI] = useState(false);
 
   // Keep selectedCard in sync with cards prop when card data changes
   useEffect(() => {
@@ -77,8 +83,7 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
   const columns = [
     { id: 'considering', label: 'Considering', color: 'blue' },
     { id: 'shortlist', label: 'Shortlist', color: 'purple' },
-    { id: 'booked', label: 'Booked', color: 'green' },
-    { id: 'dismissed', label: 'Dismissed', color: 'gray' },
+    { id: 'confirmed', label: 'Confirmed', color: 'green' },
   ];
 
   // Define vertical category sections (new auto-organized view)
@@ -90,29 +95,40 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
 
   // Filter and organize cards
   const filteredCards = useMemo(() => {
-    return cards.filter((card) => {
-      // Search filter
-      if (searchQuery) {
-        const payload = typeof card.payload_json === 'string' ? JSON.parse(card.payload_json) : card.payload_json;
-        const name = payload.name || payload.title || '';
-        if (!name.toLowerCase().includes(searchQuery.toLowerCase())) {
-          return false;
+    return cards
+      // Migrate old 'booked' labels to 'confirmed' for backwards compatibility
+      .map((card) => {
+        if (card.labels?.includes('booked')) {
+          return {
+            ...card,
+            labels: card.labels.map(l => l === 'booked' ? 'confirmed' : l),
+          };
         }
-      }
+        return card;
+      })
+      .filter((card) => {
+        // Search filter
+        if (searchQuery) {
+          const payload = typeof card.payload_json === 'string' ? JSON.parse(card.payload_json) : card.payload_json;
+          const name = payload.name || payload.title || '';
+          if (!name.toLowerCase().includes(searchQuery.toLowerCase())) {
+            return false;
+          }
+        }
 
-      return true;
-    });
+        return true;
+      });
   }, [cards, searchQuery]);
 
   // Group cards by column (for flat kanban view - kept for reference)
   const cardsByColumn = useMemo(() => {
     const grouped: Record<string, Card[]> = {};
     columns.forEach((col) => {
-      grouped[col.id] = filteredCards.filter((card) => card.labels.includes(col.id));
+      grouped[col.id] = filteredCards.filter((card) => (card.labels || []).includes(col.id));
     });
     // Add unlabeled cards to 'considering'
     grouped.considering.push(
-      ...filteredCards.filter((card) => card.labels.length === 0 || !card.labels.some(label => columns.find((c) => c.id === label)))
+      ...filteredCards.filter((card) => !card.labels || card.labels.length === 0 || !card.labels.some(label => columns.find((c) => c.id === label)))
     );
     return grouped;
   }, [filteredCards, columns]);
@@ -132,12 +148,12 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
     // First, get cards for each column
     const columnCards: Record<string, Card[]> = {};
     columns.forEach((col) => {
-      columnCards[col.id] = filteredCards.filter((card) => card.labels.includes(col.id));
+      columnCards[col.id] = filteredCards.filter((card) => (card.labels || []).includes(col.id));
     });
 
     // Add unlabeled cards to 'considering'
     const unlabeledCards = filteredCards.filter(
-      (card) => card.labels.length === 0 || !card.labels.some(label => columns.find((c) => c.id === label))
+      (card) => !card.labels || card.labels.length === 0 || !card.labels.some(label => columns.find((c) => c.id === label))
     );
     columnCards.considering = [...(columnCards.considering || []), ...unlabeledCards];
 
@@ -168,8 +184,8 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
 
   // Helper: Get column ID from card's labels
   const getColumnId = (card: Card): string => {
-    const columnIds = ['considering', 'shortlist', 'booked', 'dismissed'];
-    const columnLabel = card.labels.find(l => columnIds.includes(l));
+    const columnIds = ['considering', 'shortlist', 'confirmed', 'dismissed'];
+    const columnLabel = (card.labels || []).find(l => columnIds.includes(l));
     return columnLabel || 'considering';
   };
 
@@ -203,6 +219,33 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
     // Find the active card
     const draggedCard = filteredCards.find(c => c.id === activeId);
     if (!draggedCard) return;
+
+    // Check if dropping on a day section (for scheduling cards in booked column)
+    if (overId.startsWith('day-section-')) {
+      const dayNumber = parseInt(overId.replace('day-section-', ''));
+
+      if (onCardUpdate) {
+        // Update the card's day assignment
+        // dayNumber 0 means Unscheduled (set day to null/undefined)
+        const newDay = dayNumber === 0 ? undefined : dayNumber;
+
+        // Also ensure the card is in the booked column
+        const columnIds = ['considering', 'shortlist', 'confirmed', 'dismissed'];
+        const newLabels = (draggedCard.labels || []).filter(l => !columnIds.includes(l));
+        newLabels.push('confirmed');
+
+        // Calculate order based on existing cards in that day
+        const cardsInDay = cards.filter(c => c.day === newDay && (c.labels || []).includes('confirmed'));
+
+        onCardUpdate({
+          ...draggedCard,
+          day: newDay,
+          labels: newLabels,
+          order: cardsInDay.length,
+        });
+      }
+      return;
+    }
 
     // Get source column
     const sourceColumnId = getColumnId(draggedCard);
@@ -251,8 +294,8 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
     // Different column - move card to new column
     else if (sourceColumnId !== targetColumnId) {
       // Remove old column label and add new one
-      const columnIds = ['considering', 'shortlist', 'booked', 'dismissed'];
-      const newLabels = draggedCard.labels.filter(l => !columnIds.includes(l));
+      const columnIds = ['considering', 'shortlist', 'confirmed', 'dismissed'];
+      const newLabels = (draggedCard.labels || []).filter(l => !columnIds.includes(l));
       newLabels.push(targetColumnId);
 
       // Calculate new order based on drop position
@@ -292,6 +335,50 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
   // Handle card click to open detail panel
   const handleCardClick = (card: Card) => {
     setSelectedCard(card);
+  };
+
+  // Handle adding AI-generated cards to the board
+  const handleAICardsGenerated = async (newCards: Omit<Card, 'id' | 'created_at' | 'updated_at'>[]) => {
+    // Guest mode (no tripId or draft) - add cards locally without saving to DB
+    if (!tripId || tripId === 'draft') {
+      if (onAddCard) {
+        for (const cardData of newCards) {
+          const card: Card = {
+            id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            ...cardData,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          onAddCard(card);
+        }
+      }
+      return;
+    }
+
+    // Authenticated user - save to DB then add to local state
+    for (const cardData of newCards) {
+      try {
+        const response = await fetch('/api/cards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cardData),
+        });
+
+        if (!response.ok) {
+          console.error('Failed to save card:', await response.text());
+          continue;
+        }
+
+        const savedCard = await response.json();
+
+        // Add the saved card to local state so it appears immediately
+        if (onAddCard) {
+          onAddCard(savedCard);
+        }
+      } catch (error) {
+        console.error('Error saving card:', error);
+      }
+    }
   };
 
   return (
@@ -434,6 +521,9 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
                   onCardUpdate={onCardUpdate}
                   onCardDelete={onCardDelete}
                   onCardClick={handleCardClick}
+                  onCardDuplicate={onCardDuplicate}
+                  onAskAI={column.id === 'considering' ? () => setShowAskAI(true) : undefined}
+                  tripDates={trip.dates}
                 />
               ))}
             </div>
@@ -496,6 +586,18 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
         isOpen={!!selectedCard}
         onClose={() => setSelectedCard(null)}
         onCardUpdate={onCardUpdate}
+      />
+
+      {/* Ask AI Modal */}
+      <AskAIModal
+        isOpen={showAskAI}
+        onClose={() => setShowAskAI(false)}
+        tripId={tripId}
+        destination={trip.destination?.name}
+        dates={trip.dates}
+        budget={trip.budget_range?.[1]}
+        onAddCards={handleAICardsGenerated}
+        existingCards={cards}
       />
     </div>
   );

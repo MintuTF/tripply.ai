@@ -48,6 +48,7 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const { trip_id, type, payload_json, labels, favorite } = body;
+    // Note: day, time_slot, order are used in the frontend but not stored in DB yet
 
     if (!trip_id || !type || !payload_json) {
       return NextResponse.json(
@@ -56,25 +57,39 @@ export async function POST(request: Request) {
       );
     }
 
-    const card = await createCard({
-      trip_id,
-      type,
-      payload_json,
-      labels: labels || [],
-      favorite: favorite || false,
-    });
+    // Only insert fields that exist in the database schema
+    const { data: card, error } = await supabase
+      .from('cards')
+      .insert({
+        trip_id,
+        type,
+        payload_json,
+        labels: labels || [],
+        favorite: favorite || false,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating card:', error);
+      return NextResponse.json(
+        { error: error.message || 'Failed to create card' },
+        { status: 500 }
+      );
+    }
 
     if (!card) {
       return NextResponse.json(
-        { error: 'Failed to create card' },
+        { error: 'Failed to create card - no data returned' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ card }, { status: 201 });
-  } catch (_error) {
+  } catch (err) {
+    console.error('Error in POST /api/cards:', err);
     return NextResponse.json(
-      { error: 'Failed to create card' },
+      { error: err instanceof Error ? err.message : 'Failed to create card' },
       { status: 500 }
     );
   }
