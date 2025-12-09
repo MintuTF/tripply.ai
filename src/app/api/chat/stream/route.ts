@@ -20,6 +20,9 @@ export async function POST(request: Request) {
     // Check if Supabase is configured
     const hasSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+    // Check if trip_id is a valid UUID (not "draft" or other placeholder)
+    const isValidUUID = trip_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trip_id);
+
     let messages: Message[] = [];
     let tripContext:
       | {
@@ -30,7 +33,7 @@ export async function POST(request: Request) {
         }
       | undefined = undefined;
 
-    if (hasSupabase && trip_id) {
+    if (hasSupabase && isValidUUID) {
       const supabase = await createServerComponentClient();
       const {
         data: { user },
@@ -81,7 +84,7 @@ export async function POST(request: Request) {
 
           // Stream the AI response
           for await (const chunk of orchestrateChatStream({
-            messages: hasSupabase ? messages.slice(0, -1) : messages,
+            messages: isValidUUID ? messages.slice(0, -1) : messages,
             userMessage: message,
             tripContext,
           })) {
@@ -121,8 +124,8 @@ export async function POST(request: Request) {
             }
           }
 
-          // Save assistant message to database if Supabase is configured
-          if (hasSupabase && trip_id && fullResponse) {
+          // Save assistant message to database if Supabase is configured and trip_id is valid
+          if (hasSupabase && isValidUUID && fullResponse) {
             await createMessage({
               trip_id,
               role: 'assistant',

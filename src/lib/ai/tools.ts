@@ -191,6 +191,42 @@ export const TOOLS: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'search_hotel_offers',
+      description:
+        'Search for hotel offers with real-time pricing and availability. Use this when users ask about hotels, accommodations, or places to stay. Returns hotels with prices, ratings, and amenities.',
+      parameters: {
+        type: 'object',
+        properties: {
+          city: {
+            type: 'string',
+            description: 'City name (e.g., "Seattle", "Paris", "Tokyo")',
+          },
+          check_in_date: {
+            type: 'string',
+            description: 'Check-in date in YYYY-MM-DD format',
+          },
+          check_out_date: {
+            type: 'string',
+            description: 'Check-out date in YYYY-MM-DD format',
+          },
+          adults: {
+            type: 'integer',
+            description: 'Number of adult guests (default: 2)',
+            default: 2,
+          },
+          max_results: {
+            type: 'integer',
+            description: 'Maximum number of hotels to return (default: 10)',
+            default: 10,
+          },
+        },
+        required: ['city', 'check_in_date', 'check_out_date'],
+      },
+    },
+  },
 ];
 
 /**

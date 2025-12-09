@@ -1,9 +1,65 @@
 // Core Data Models
+export type UserRole = 'user' | 'admin';
+
+// View Types
+export type TripView = 'map' | 'board' | 'chat' | 'marketplace';
+
+// Chat Board Types
+export type ChatBoardItemStatus = 'shortlist' | 'confirmed';
+
+export type ChatBoardItem = {
+  id: string;
+  trip_id: string;
+  card: PlaceCard;
+  status: ChatBoardItemStatus;
+  created_at: string;
+};
+
 export type User = {
   id: string;
   email: string;
   name: string;
+  role?: UserRole;
   prefs_json?: UserPreferences;
+  created_at: string;
+  updated_at: string;
+};
+
+// Admin Types
+export type FeedbackCategory = 'bug' | 'feature' | 'general';
+export type FeedbackStatus = 'new' | 'reviewed' | 'resolved' | 'dismissed';
+
+export type Feedback = {
+  id: string;
+  user_id?: string;
+  user_email?: string;
+  category: FeedbackCategory;
+  message: string;
+  page_url?: string;
+  status: FeedbackStatus;
+  admin_notes?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminProduct = {
+  id: string;
+  name: string;
+  description?: string;
+  short_description?: string;
+  image?: string;
+  price: number;
+  affiliate_url: string;
+  category: string;
+  tags: string[];
+  rating?: number;
+  review_count?: number;
+  budget_tier?: 'budget' | 'mid-range' | 'premium';
+  weather_conditions?: string[];
+  trip_types?: string[];
+  activities?: string[];
+  destinations?: string[];
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -78,6 +134,11 @@ export type PlaceCard = {
   duration?: string; // For activities
   url?: string;
   place_id?: string;
+  // Hotel-specific fields
+  check_in_date?: string;
+  check_out_date?: string;
+  price_per_night?: number;
+  currency?: string;
 };
 
 export type ToolCall = {

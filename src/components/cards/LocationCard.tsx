@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { PlaceCard } from '@/types';
 import { cn } from '@/lib/utils';
-import { Star, Heart, MapPin, ExternalLink, Plus, Bookmark } from 'lucide-react';
+import { MapPin, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { RatingBadge } from './RatingBadge';
 
 interface LocationCardProps {
   card: PlaceCard;
@@ -13,169 +14,119 @@ interface LocationCardProps {
   onClick?: (card: PlaceCard) => void;
 }
 
-export function LocationCard({ card, onAddToTrip, onSave, onClick }: LocationCardProps) {
-  const [isSaved, setIsSaved] = useState(false);
-  const [isAdded, setIsAdded] = useState(false);
+// Curated location/attraction placeholder images
+const LOCATION_IMAGES = [
+  'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?w=400&h=300&fit=crop',
+];
 
-  const handleSave = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsSaved(!isSaved);
-    onSave?.(card);
-  };
+function getLocationImage(id: string): string {
+  const index = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % LOCATION_IMAGES.length;
+  return LOCATION_IMAGES[index];
+}
+
+function extractLocation(address?: string): string {
+  if (!address) return 'Location unavailable';
+  const parts = address.split(',').map(p => p.trim());
+  if (parts.length >= 2) {
+    return parts.slice(-2).join(', ');
+  }
+  return address;
+}
+
+export function LocationCard({ card, onAddToTrip, onClick }: LocationCardProps) {
+  const [isAdded, setIsAdded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const handleAddToTrip = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsAdded(true);
     onAddToTrip?.(card);
-
-    // Reset after animation
     setTimeout(() => setIsAdded(false), 2000);
   };
 
-  const mainImage = card.photos[0] || '/placeholder-location.jpg';
+  const mainImage = card.photos?.[0] || getLocationImage(card.id);
+  const fallbackImage = 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=400&h=300&fit=crop';
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.3 }}
       onClick={() => onClick?.(card)}
       className={cn(
-        'group relative overflow-hidden rounded-2xl bg-card border-2 border-border/50',
-        'cursor-pointer transition-all duration-300',
-        'hover:border-primary/50 hover:shadow-depth hover:-translate-y-1',
-        'backdrop-blur-sm'
+        'group relative overflow-hidden rounded-xl bg-card',
+        'cursor-pointer transition-all duration-200',
+        'shadow-md hover:shadow-xl hover:scale-[1.02]',
+        'border border-border/30'
       )}
     >
       {/* Image Section */}
-      <div className="relative h-48 overflow-hidden bg-muted">
+      <div className="relative h-40 overflow-hidden bg-muted">
         <img
-          src={mainImage}
+          src={imageError ? fallbackImage : mainImage}
           alt={card.name}
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-          onError={(e) => {
-            e.currentTarget.src = '/placeholder-location.jpg';
-          }}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          onError={() => setImageError(true)}
         />
-
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-
-        {/* Quick Actions - Top Right */}
-        <div className="absolute right-3 top-3 flex gap-2 opacity-0 transition-all duration-300 group-hover:opacity-100">
-          <button
-            onClick={handleSave}
-            className={cn(
-              'rounded-full p-2.5 shadow-lg backdrop-blur-md transition-all duration-300',
-              'hover:scale-110',
-              isSaved
-                ? 'bg-primary text-white shadow-primary/50'
-                : 'bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300'
-            )}
-            title="Save for later"
-          >
-            <Bookmark className={cn('h-4 w-4', isSaved && 'fill-current')} />
-          </button>
-        </div>
-
-        {/* Type Badge - Top Left */}
-        <div className="absolute left-3 top-3">
-          <span className="rounded-full bg-white/90 dark:bg-gray-800/90 px-3 py-1 text-xs font-semibold text-foreground backdrop-blur-md capitalize">
-            {card.type}
-          </span>
-        </div>
-
-        {/* Rating - Bottom Left on Image */}
-        {card.rating && (
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-gray-800/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
-            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-            <span className="text-sm font-bold text-foreground">{card.rating.toFixed(1)}</span>
-            {card.review_count && (
-              <span className="text-xs text-muted-foreground">({card.review_count})</span>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Content Section */}
-      <div className="p-4">
-        {/* Title */}
-        <h3 className="mb-2 text-base font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
+      <div className="p-4 space-y-3">
+        {/* Location Name */}
+        <h3 className="text-lg font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
           {card.name}
         </h3>
 
-        {/* Address */}
-        {card.address && (
-          <div className="mb-3 flex items-start gap-2">
-            <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-0.5" />
-            <p className="text-xs text-muted-foreground line-clamp-2">
-              {card.address}
-            </p>
-          </div>
+        {/* Location */}
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="line-clamp-1">{extractLocation(card.address)}</span>
+        </div>
+
+        {/* Rating Badge */}
+        {card.rating && (
+          <RatingBadge
+            rating={card.rating}
+            reviewCount={card.review_count}
+            size="sm"
+          />
         )}
 
-        {/* Description (if available) */}
+        {/* Description */}
         {card.description && (
-          <p className="mb-3 text-sm text-foreground/80 line-clamp-2">
+          <p className="text-xs text-muted-foreground line-clamp-2">
             {card.description}
           </p>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 pt-2">
-          <button
-            onClick={handleAddToTrip}
-            disabled={isAdded}
-            className={cn(
-              'flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold',
-              'transition-all duration-300',
-              isAdded
-                ? 'bg-green-500 text-white'
-                : 'gradient-primary text-white shadow-lg hover:shadow-xl hover:scale-[1.02]'
-            )}
-          >
-            {isAdded ? (
-              <>
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                >
-                  ✓
-                </motion.div>
-                <span>Added!</span>
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4" />
-                <span>Add to Trip</span>
-              </>
-            )}
-          </button>
-
-          {card.url && (
-            <a
-              href={card.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center justify-center rounded-xl border-2 border-border/50 bg-card px-3 py-2.5 text-sm font-semibold transition-all duration-300 hover:border-primary/50 hover:bg-primary/5"
-              title="View on Google Maps"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </a>
+        {/* CTA Button */}
+        <button
+          onClick={handleAddToTrip}
+          disabled={isAdded}
+          className={cn(
+            'w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold',
+            'transition-all duration-200',
+            isAdded
+              ? 'bg-green-500 text-white'
+              : 'bg-primary text-white hover:bg-primary/90'
           )}
-        </div>
+        >
+          {isAdded ? (
+            <span>Added!</span>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              <span>Shortlist</span>
+            </>
+          )}
+        </button>
       </div>
-
-      {/* Hover Lift Effect */}
-      <div className="absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 pointer-events-none"
-        style={{
-          boxShadow: '0 20px 60px -10px rgba(0, 0, 0, 0.3)',
-        }}
-      />
     </motion.div>
   );
 }

@@ -13,8 +13,11 @@ import {
   Copy,
   Mail,
   Printer,
+  Video,
+  Sparkles,
 } from 'lucide-react';
 import { exportToPDF, exportToCalendar, generateShareLink, copyToClipboard } from '@/lib/utils/export';
+import { StoryGeneratorModal } from '@/components/story/StoryGeneratorModal';
 
 interface ExportMenuProps {
   trip: Trip;
@@ -25,6 +28,10 @@ export function ExportMenu({ trip, cards }: ExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
+  const [showStoryModal, setShowStoryModal] = useState(false);
+
+  const confirmedCount = cards.filter(c => c.labels?.includes('confirmed')).length;
+  const hasConfirmedCards = confirmedCount > 0;
 
   const handleExportPDF = async () => {
     setLoading('pdf');
@@ -146,6 +153,39 @@ export function ExportMenu({ trip, cards }: ExportMenuProps) {
 
                 <div className="my-2 h-px bg-border" />
 
+                {/* Section: Create */}
+                <div className="px-3 py-2 text-xs font-bold text-muted-foreground uppercase">
+                  Create
+                </div>
+
+                {/* Create Story Video */}
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    setShowStoryModal(true);
+                  }}
+                  disabled={!hasConfirmedCards}
+                  className={cn(
+                    'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all duration-200',
+                    hasConfirmedCards ? 'hover:bg-accent' : 'opacity-50 cursor-not-allowed'
+                  )}
+                >
+                  <div className="relative">
+                    <Video className="h-5 w-5 text-purple-500" />
+                    <Sparkles className="h-3 w-3 text-yellow-500 absolute -top-1 -right-1" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-foreground">Create Story Video</p>
+                    <p className="text-xs text-muted-foreground">
+                      {hasConfirmedCards
+                        ? 'TikTok / Reels style video'
+                        : 'Confirm items first'}
+                    </p>
+                  </div>
+                </button>
+
+                <div className="my-2 h-px bg-border" />
+
                 {/* Section: Share */}
                 <div className="px-3 py-2 text-xs font-bold text-muted-foreground uppercase">
                   Share
@@ -185,13 +225,21 @@ export function ExportMenu({ trip, cards }: ExportMenuProps) {
               {/* Footer */}
               <div className="border-t border-border p-2">
                 <p className="text-xs text-center text-muted-foreground">
-                  {cards.filter(c => c.labels?.includes('confirmed')).length} confirmed items
+                  {confirmedCount} confirmed items
                 </p>
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
+
+      {/* Story Generator Modal */}
+      <StoryGeneratorModal
+        isOpen={showStoryModal}
+        onClose={() => setShowStoryModal(false)}
+        tripId={trip.id}
+        tripTitle={trip.title}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { getWeather } from '../tools/weather';
 import { searchPlaces, getPlaceDetails, calculateTravelTime } from '../tools/places';
 import { searchWeb } from '../tools/search';
 import { searchEvents } from '../tools/events';
+import { searchHotelOffers } from '../tools/hotelSearch';
 
 /**
  * Tool executor interface
@@ -24,6 +25,7 @@ interface ToolExecutor {
   get_place_details: (params: any) => Promise<any>;
   search_events: (params: any) => Promise<any>;
   calculate_travel_time: (params: any) => Promise<any>;
+  search_hotel_offers: (params: any) => Promise<any>;
 }
 
 /**
@@ -36,7 +38,26 @@ const toolExecutors: ToolExecutor = {
   get_place_details: getPlaceDetails,
   search_events: searchEvents,
   calculate_travel_time: calculateTravelTime,
+  search_hotel_offers: searchHotelOffers,
 };
+
+/**
+ * Get system prompt with current date context
+ */
+function getSystemPromptWithDate(): string {
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  const currentYear = new Date().getFullYear();
+
+  return `${SYSTEM_PROMPT}
+
+**IMPORTANT - Current Date Context:**
+Today's date is ${currentDate}. When users mention dates like "Dec 20" or "next week", always interpret them relative to today's date and use the current year (${currentYear}) or next year as appropriate. For hotel searches and bookings, always use future dates in YYYY-MM-DD format.`;
+}
 
 /**
  * Execute a tool call
@@ -115,7 +136,7 @@ export async function orchestrateChat(params: {
   const conversationHistory: ChatCompletionMessageParam[] = [
     {
       role: 'system',
-      content: SYSTEM_PROMPT,
+      content: getSystemPromptWithDate(),
     },
   ];
 
@@ -256,7 +277,7 @@ export async function* orchestrateChatStream(params: {
   const conversationHistory: ChatCompletionMessageParam[] = [
     {
       role: 'system',
-      content: SYSTEM_PROMPT,
+      content: getSystemPromptWithDate(),
     },
   ];
 

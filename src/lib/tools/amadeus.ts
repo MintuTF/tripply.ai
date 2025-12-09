@@ -78,7 +78,47 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 /**
- * Search hotels by city code
+ * Get hotel IDs by city code (step 1 of 2-step process)
+ */
+async function getHotelIdsByCityCode(params: {
+  cityCode: string;
+  radius?: number;
+  radiusUnit?: 'KM' | 'MILE';
+  token: string;
+}): Promise<string[]> {
+  const { cityCode, radius = 50, radiusUnit = 'KM', token } = params;
+
+  const searchParams = new URLSearchParams({
+    cityCode,
+    radius: radius.toString(),
+    radiusUnit,
+  });
+
+  const url = `${AMADEUS_BASE_URL}/v1/reference-data/locations/hotels/by-city?${searchParams.toString()}`;
+
+  console.log('[Amadeus] Getting hotel IDs by city code:', { cityCode, radius, radiusUnit, url });
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[Amadeus] Failed to get hotel IDs by city:', response.status, errorText);
+    return [];
+  }
+
+  const data = await response.json();
+  const hotelIds = (data.data || []).map((hotel: any) => hotel.hotelId).slice(0, 50); // Limit to 50 hotels for more availability matches
+
+  console.log(`[Amadeus] Found ${hotelIds.length} hotel IDs for city ${cityCode}`);
+  return hotelIds;
+}
+
+/**
+ * Search hotels by city code (2-step process)
  */
 export async function searchHotelsByCity(params: {
   cityCode: string;
@@ -104,31 +144,63 @@ export async function searchHotelsByCity(params: {
       checkInDate,
       checkOutDate,
       adults = 1,
-      radius = 5,
+      radius = 50,
       radiusUnit = 'KM',
     } = params;
 
-    const searchParams = new URLSearchParams({
+    // Step 1: Get hotel IDs by city code
+    const hotelIds = await getHotelIdsByCityCode({
       cityCode,
-      radius: radius.toString(),
+      radius,
       radiusUnit,
+      token,
+    });
+
+    if (hotelIds.length === 0) {
+      console.log('[Amadeus] No hotels found for city:', cityCode);
+      return {
+        success: true,
+        data: [],
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // Step 2: Get pricing for hotel IDs
+    const searchParams = new URLSearchParams({
+      hotelIds: hotelIds.join(','),
       adults: adults.toString(),
     });
 
     if (checkInDate) searchParams.append('checkInDate', checkInDate);
     if (checkOutDate) searchParams.append('checkOutDate', checkOutDate);
 
-    const response = await fetch(
-      `${AMADEUS_BASE_URL}/v3/shopping/hotel-offers?${searchParams.toString()}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const requestUrl = `${AMADEUS_BASE_URL}/v3/shopping/hotel-offers?${searchParams.toString()}`;
+    console.log('[Amadeus] Getting hotel offers:', {
+      hotelCount: hotelIds.length,
+      checkInDate,
+      checkOutDate,
+      adults,
+    });
+
+    const response = await fetch(requestUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     if (!response.ok) {
-      console.error('Amadeus hotel search failed:', response.status);
+      const errorText = await response.text();
+      let errorDetails;
+      try {
+        errorDetails = JSON.parse(errorText);
+      } catch {
+        errorDetails = errorText;
+      }
+      console.error('Amadeus hotel search failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: JSON.stringify(errorDetails, null, 2),
+      });
       return {
         success: false,
         error: `Amadeus API error: ${response.status}`,
@@ -160,6 +232,8 @@ export async function searchHotelsByCity(params: {
       }))
     );
 
+    console.log(`[Amadeus] Successfully found ${offers.length} hotel offers`);
+
     return {
       success: true,
       data: offers,
@@ -185,7 +259,7 @@ async function getHotelIdsByLocation(params: {
   radiusUnit?: 'KM' | 'MILE';
   token: string;
 }): Promise<string[]> {
-  const { latitude, longitude, radius = 5, radiusUnit = 'KM', token } = params;
+  const { latitude, longitude, radius = 50, radiusUnit = 'KM', token } = params;
 
   const searchParams = new URLSearchParams({
     latitude: latitude.toString(),
@@ -210,7 +284,7 @@ async function getHotelIdsByLocation(params: {
   }
 
   const data = await response.json();
-  const hotelIds = (data.data || []).map((hotel: any) => hotel.hotelId).slice(0, 20); // Limit to 20 hotels
+  const hotelIds = (data.data || []).map((hotel: any) => hotel.hotelId).slice(0, 50); // Limit to 50 hotels for more availability matches
 
   console.log(`[Amadeus] Found ${hotelIds.length} hotel IDs`);
   return hotelIds;
@@ -245,7 +319,7 @@ export async function searchHotelsByLocation(params: {
       checkInDate,
       checkOutDate,
       adults = 1,
-      radius = 5,
+      radius = 50,
       radiusUnit = 'KM',
     } = params;
 
@@ -471,4 +545,123 @@ export function getDefaultDates(): { checkInDate: string; checkOutDate: string }
     checkInDate: tomorrow.toISOString().split('T')[0],
     checkOutDate: dayAfter.toISOString().split('T')[0],
   };
+}
+
+/**
+ * City name to IATA code mapping for Amadeus API
+ */
+const CITY_CODES: Record<string, string> = {
+  // US Cities
+  'seattle': 'SEA',
+  'new york': 'NYC',
+  'new york city': 'NYC',
+  'nyc': 'NYC',
+  'los angeles': 'LAX',
+  'la': 'LAX',
+  'san francisco': 'SFO',
+  'chicago': 'CHI',
+  'miami': 'MIA',
+  'las vegas': 'LAS',
+  'boston': 'BOS',
+  'denver': 'DEN',
+  'atlanta': 'ATL',
+  'dallas': 'DFW',
+  'houston': 'HOU',
+  'phoenix': 'PHX',
+  'san diego': 'SAN',
+  'portland': 'PDX',
+  'orlando': 'ORL',
+  'washington dc': 'WAS',
+  'washington': 'WAS',
+  'philadelphia': 'PHL',
+  'austin': 'AUS',
+  'nashville': 'BNA',
+  'new orleans': 'MSY',
+  'honolulu': 'HNL',
+  'hawaii': 'HNL',
+
+  // European Cities
+  'paris': 'PAR',
+  'london': 'LON',
+  'rome': 'ROM',
+  'barcelona': 'BCN',
+  'madrid': 'MAD',
+  'amsterdam': 'AMS',
+  'berlin': 'BER',
+  'munich': 'MUC',
+  'vienna': 'VIE',
+  'prague': 'PRG',
+  'lisbon': 'LIS',
+  'dublin': 'DUB',
+  'brussels': 'BRU',
+  'zurich': 'ZRH',
+  'geneva': 'GVA',
+  'milan': 'MIL',
+  'florence': 'FLR',
+  'venice': 'VCE',
+  'athens': 'ATH',
+  'istanbul': 'IST',
+  'copenhagen': 'CPH',
+  'stockholm': 'STO',
+  'oslo': 'OSL',
+  'helsinki': 'HEL',
+  'edinburgh': 'EDI',
+  'manchester': 'MAN',
+
+  // Asian Cities
+  'tokyo': 'TYO',
+  'osaka': 'OSA',
+  'kyoto': 'UKY',
+  'seoul': 'SEL',
+  'beijing': 'BJS',
+  'shanghai': 'SHA',
+  'hong kong': 'HKG',
+  'singapore': 'SIN',
+  'bangkok': 'BKK',
+  'kuala lumpur': 'KUL',
+  'taipei': 'TPE',
+  'manila': 'MNL',
+  'jakarta': 'JKT',
+  'ho chi minh': 'SGN',
+  'hanoi': 'HAN',
+  'delhi': 'DEL',
+  'mumbai': 'BOM',
+  'bangalore': 'BLR',
+
+  // Other Major Cities
+  'dubai': 'DXB',
+  'abu dhabi': 'AUH',
+  'doha': 'DOH',
+  'cairo': 'CAI',
+  'cape town': 'CPT',
+  'johannesburg': 'JNB',
+  'sydney': 'SYD',
+  'melbourne': 'MEL',
+  'auckland': 'AKL',
+  'toronto': 'YTO',
+  'vancouver': 'YVR',
+  'montreal': 'YMQ',
+  'mexico city': 'MEX',
+  'cancun': 'CUN',
+  'buenos aires': 'BUE',
+  'rio de janeiro': 'RIO',
+  'sao paulo': 'SAO',
+  'lima': 'LIM',
+};
+
+/**
+ * Get IATA city code from city name
+ * @param cityName - City name (case insensitive)
+ * @returns IATA city code or null if not found
+ */
+export function getCityCode(cityName: string): string | null {
+  const normalized = cityName.toLowerCase().trim();
+  return CITY_CODES[normalized] || null;
+}
+
+/**
+ * Check if Amadeus API is configured
+ */
+export function isAmadeusConfigured(): boolean {
+  return !!(AMADEUS_API_KEY && AMADEUS_API_SECRET);
 }

@@ -38,13 +38,14 @@ interface TripBoardProps {
   onArchive?: () => void;
   isLoggedOut?: boolean;
   onAddCard?: (card: Card) => void;  // For local card adding (guest mode)
+  onSaveRequired?: () => void;  // Called when action requires saved trip (e.g., confirming cards)
 }
 
 /**
  * TripBoard - Kanban-style board for organizing saved cards
  * Inspired by Notion and Linear's card organization
  */
-export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete, onCardDuplicate, onTripUpdate, onArchive, isLoggedOut, onAddCard }: TripBoardProps) {
+export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete, onCardDuplicate, onTripUpdate, onArchive, isLoggedOut, onAddCard, onSaveRequired }: TripBoardProps) {
   const [viewMode, setViewMode] = useState<'kanban' | 'grid' | 'list' | 'itinerary' | 'budget'>('kanban');
   const [totalBudget, setTotalBudget] = useState<number | undefined>(trip.budget_range ? trip.budget_range[1] : undefined);
   const [searchQuery, setSearchQuery] = useState('');
@@ -222,6 +223,12 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
 
     // Check if dropping on a day section (for scheduling cards in booked column)
     if (overId.startsWith('day-section-')) {
+      // Check if trip is draft before assigning to day + confirmed
+      if (tripId === 'draft' && onSaveRequired) {
+        onSaveRequired();
+        return;
+      }
+
       const dayNumber = parseInt(overId.replace('day-section-', ''));
 
       if (onCardUpdate) {
@@ -293,6 +300,14 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
     }
     // Different column - move card to new column
     else if (sourceColumnId !== targetColumnId) {
+      // Check if trying to move to confirmed column with unsaved trip
+      if (targetColumnId === 'confirmed' && tripId === 'draft') {
+        if (onSaveRequired) {
+          onSaveRequired();
+        }
+        return; // Block the move until trip is saved
+      }
+
       // Remove old column label and add new one
       const columnIds = ['considering', 'shortlist', 'confirmed', 'dismissed'];
       const newLabels = (draggedCard.labels || []).filter(l => !columnIds.includes(l));
@@ -339,8 +354,8 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
 
   // Handle adding AI-generated cards to the board
   const handleAICardsGenerated = async (newCards: Omit<Card, 'id' | 'created_at' | 'updated_at'>[]) => {
-    // Guest mode (no tripId or draft) - add cards locally without saving to DB
-    if (!tripId || tripId === 'draft') {
+    // Guest mode (no tripId, draft, or logged out) - add cards locally without saving to DB
+    if (!tripId || tripId === 'draft' || isLoggedOut) {
       if (onAddCard) {
         for (const cardData of newCards) {
           const card: Card = {
@@ -355,7 +370,7 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
       return;
     }
 
-    // Authenticated user - save to DB then add to local state
+    // Authenticated user with saved trip - save to DB then add to local state
     for (const cardData of newCards) {
       try {
         const response = await fetch('/api/cards', {

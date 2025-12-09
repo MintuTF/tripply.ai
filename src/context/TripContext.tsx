@@ -36,7 +36,7 @@ interface TripContextType {
   // State
   cards: Card[];
   trip: Partial<Trip> | null;
-  activeView: 'map' | 'board' | 'chat';
+  activeView: 'map' | 'board' | 'marketplace';
   isModified: boolean;
   isSaving: boolean;
   isHydrated: boolean;
@@ -48,7 +48,7 @@ interface TripContextType {
 
   // Trip actions
   updateTrip: (updates: Partial<Trip>) => void;
-  setActiveView: (view: 'map' | 'board' | 'chat') => void;
+  setActiveView: (view: 'map' | 'board' | 'marketplace') => void;
 
   // Save actions
   saveToDatabase: (tripData?: CreateTripData) => Promise<{ success: boolean; tripId?: string; error?: string }>;
@@ -84,7 +84,7 @@ export function TripProvider({ children }: TripProviderProps) {
   // Local state that syncs with localStorage
   const [cards, setCards] = useState<Card[]>([]);
   const [trip, setTrip] = useState<Partial<Trip> | null>(null);
-  const [activeView, setActiveView] = useState<'map' | 'board' | 'chat'>('map');
+  const [activeView, setActiveView] = useState<'map' | 'board' | 'marketplace'>('map');
   const [isModified, setIsModified] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
