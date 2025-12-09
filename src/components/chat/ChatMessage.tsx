@@ -26,12 +26,7 @@ export function ChatMessage({ message, isLatest }: ChatMessageProps) {
     <div className="py-8 animate-in fade-in slide-in-from-bottom-4">
       {/* Assistant Response - Flat, document-style */}
       <div className="space-y-6">
-        {/* Markdown Content */}
-        <div className="prose prose-gray max-w-none dark:prose-invert">
-          <MarkdownRenderer content={message.text} />
-        </div>
-
-        {/* Cards Grid - Rich place cards with images */}
+        {/* Cards Grid - Rich place cards with images - DISPLAYED FIRST/ON TOP */}
         {message.cards_json && Array.isArray(message.cards_json) && message.cards_json.length > 0 && (
           <CardGrid
             cards={message.cards_json}
@@ -39,6 +34,11 @@ export function ChatMessage({ message, isLatest }: ChatMessageProps) {
             onSave={savePlace}
           />
         )}
+
+        {/* Markdown Content */}
+        <div className="prose prose-gray max-w-none dark:prose-invert">
+          <MarkdownRenderer content={message.text} />
+        </div>
 
         {/* Tool Calls - Simplified badges */}
         {message.tool_calls_json && Array.isArray(message.tool_calls_json) && message.tool_calls_json.length > 0 && (

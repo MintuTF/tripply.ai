@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { TripBoard } from '@/components/board/TripBoard';
 import { CompareDrawer } from '@/components/board/CompareDrawer';
+import { ChatBoard } from '@/components/chat-board/ChatBoard';
 import { Card, Trip } from '@/types';
-import { ChatInterface } from '@/components/chat/ChatInterface';
+import { MarketplaceView } from '@/components/marketplace/MarketplaceView';
 import { MapView } from '@/components/board/MapView';
 import { PlacesSearchSidebar } from '@/components/map/PlacesSearchSidebar';
 import { FloatingCardDetail } from '@/components/map/FloatingCardDetail';
@@ -20,8 +21,9 @@ import { useTripContext } from '@/context/TripContext';
 import {
   Sparkles,
   LayoutDashboard,
-  MessageSquare,
+  ShoppingBag,
   Map as MapIcon,
+  MessageSquare,
   Save,
   Share2,
   Loader2,
@@ -120,6 +122,16 @@ export default function PlanPage() {
     setToastMessage('Share feature coming soon!');
   };
 
+  const handleSaveRequired = () => {
+    if (!user) {
+      setShowSignInModal(true);
+      setPendingAction('save');
+    } else {
+      setShowCreateTripModal(true);
+    }
+    setToastMessage('Please save your trip before confirming places');
+  };
+
   // Default trip for display
   const displayTrip: Trip = {
     id: trip?.id || 'draft',
@@ -205,6 +217,18 @@ export default function PlanPage() {
               <MessageSquare className="h-4 w-4" />
               Chat
             </button>
+            <button
+              onClick={() => setActiveView('marketplace')}
+              className={cn(
+                'flex items-center gap-2 border-l-2 border-border/50 px-5 py-2.5 text-sm font-semibold transition-all duration-300',
+                activeView === 'marketplace'
+                  ? 'gradient-primary text-white shadow-lg'
+                  : 'hover:bg-accent/50'
+              )}
+            >
+              <ShoppingBag className="h-4 w-4" />
+              Shop
+            </button>
           </div>
 
           {/* Actions */}
@@ -275,7 +299,10 @@ export default function PlanPage() {
             onCardDuplicate={handleCardDuplicate}
             isLoggedOut={!user}
             onAddCard={handleAddCard}
+            onSaveRequired={handleSaveRequired}
           />
+        ) : activeView === 'chat' ? (
+          <ChatBoard tripId="draft" />
         ) : activeView === 'map' ? (
           <div className="flex h-full">
             <PlacesSearchSidebar
@@ -316,7 +343,22 @@ export default function PlanPage() {
             />
           </div>
         ) : (
-          <ChatInterface tripId="draft" />
+          <MarketplaceView
+            tripContext={
+              trip?.destination?.name
+                ? {
+                    destination: trip.destination.name,
+                    duration: trip?.dates
+                      ? Math.ceil(
+                          (new Date(trip.dates.end).getTime() -
+                            new Date(trip.dates.start).getTime()) /
+                            (1000 * 60 * 60 * 24)
+                        )
+                      : undefined,
+                  }
+                : undefined
+            }
+          />
         )}
       </main>
 

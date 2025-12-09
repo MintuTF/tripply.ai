@@ -4,10 +4,11 @@ import { use, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { TripBoard } from '@/components/board/TripBoard';
 import { CompareDrawer } from '@/components/board/CompareDrawer';
+import { ChatBoard } from '@/components/chat-board/ChatBoard';
 import { ExportMenu } from '@/components/trip/ExportMenu';
 import { PrintableItinerary } from '@/components/trip/PrintableItinerary';
 import { Card, Trip } from '@/types';
-import { ChatInterface } from '@/components/chat/ChatInterface';
+import { MarketplaceView } from '@/components/marketplace/MarketplaceView';
 import { MapView } from '@/components/board/MapView';
 import { PlacesSearchSidebar } from '@/components/map/PlacesSearchSidebar';
 import { FloatingCardDetail } from '@/components/map/FloatingCardDetail';
@@ -21,8 +22,9 @@ import Link from 'next/link';
 import {
   Sparkles,
   LayoutDashboard,
-  MessageSquare,
+  ShoppingBag,
   Map as MapIcon,
+  MessageSquare,
   Loader2,
   Save,
   ArrowLeft,
@@ -42,8 +44,8 @@ export default function TripPage({ params }: PageProps) {
   const router = useRouter();
 
   // Get initial view from URL or default to 'board'
-  const viewFromUrl = searchParams.get('view') as 'board' | 'map' | 'chat' | null;
-  const initialView = viewFromUrl && ['board', 'map', 'chat'].includes(viewFromUrl) ? viewFromUrl : 'board';
+  const viewFromUrl = searchParams.get('view') as 'board' | 'map' | 'chat' | 'marketplace' | null;
+  const initialView = viewFromUrl && ['board', 'map', 'chat', 'marketplace'].includes(viewFromUrl) ? viewFromUrl : 'board';
 
   // Trip and cards state from database
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -54,10 +56,10 @@ export default function TripPage({ params }: PageProps) {
 
   // UI state
   const [compareCards, setCompareCards] = useState<Card[]>([]);
-  const [activeView, setActiveView] = useState<'board' | 'map' | 'chat'>(initialView);
+  const [activeView, setActiveView] = useState<'board' | 'map' | 'chat' | 'marketplace'>(initialView);
 
   // Update URL when view changes
-  const handleViewChange = useCallback((view: 'board' | 'map' | 'chat') => {
+  const handleViewChange = useCallback((view: 'board' | 'map' | 'chat' | 'marketplace') => {
     setActiveView(view);
     const params = new URLSearchParams(searchParams.toString());
     params.set('view', view);
@@ -223,11 +225,12 @@ export default function TripPage({ params }: PageProps) {
     // Add to local state
     setCards(prev => [...prev, newCard]);
     const payload = newCard.payload_json as any;
-    setToastMessage(`"${payload.name}" added to Considering`);
+    const cardName = payload?.name || 'Item';
+    setToastMessage(`"${cardName}" added to Considering`);
 
     // Only sync to database if card doesn't have a real ID (temp cards from guest mode)
     // Cards with real IDs were already saved by the component that created them
-    if (newCard.id.startsWith('temp-')) {
+    if (!newCard.id || newCard.id.startsWith('temp-')) {
       try {
         await fetch('/api/cards', {
           method: 'POST',
@@ -427,6 +430,18 @@ export default function TripPage({ params }: PageProps) {
                 <MessageSquare className="h-4 w-4" />
                 Chat
               </button>
+              <button
+                onClick={() => handleViewChange('marketplace')}
+                className={cn(
+                  'flex items-center gap-2 border-l-2 border-border/50 px-5 py-2.5 text-sm font-semibold transition-all duration-300',
+                  activeView === 'marketplace'
+                    ? 'gradient-primary text-white shadow-lg'
+                    : 'hover:bg-accent/50'
+                )}
+              >
+                <ShoppingBag className="h-4 w-4" />
+                Shop
+              </button>
             </div>
 
             {/* Compare Button */}
@@ -462,6 +477,8 @@ export default function TripPage({ params }: PageProps) {
             onArchive={handleArchive}
             onAddCard={handleAddCard}
           />
+        ) : activeView === 'chat' ? (
+          <ChatBoard tripId={resolvedParams.id} />
         ) : activeView === 'map' ? (
           <div className="flex h-full">
             <PlacesSearchSidebar
@@ -502,7 +519,19 @@ export default function TripPage({ params }: PageProps) {
             />
           </div>
         ) : (
-          <ChatInterface tripId={resolvedParams.id} />
+          <MarketplaceView
+            tripContext={{
+              destination: trip.destination?.name,
+              duration: trip.dates
+                ? Math.ceil(
+                    (new Date(trip.dates.end).getTime() - new Date(trip.dates.start).getTime()) /
+                      (1000 * 60 * 60 * 24)
+                  )
+                : undefined,
+              partySize: trip.party_json?.adults || 1,
+              hasChildren: (trip.party_json?.children || 0) > 0,
+            }}
+          />
         )}
       </main>
 

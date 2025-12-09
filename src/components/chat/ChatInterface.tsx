@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Message } from '@/types';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { cn } from '@/lib/utils';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { SignInButton } from '@/components/auth/SignInButton';
 import { UserMenu } from '@/components/auth/UserMenu';
@@ -19,16 +19,95 @@ interface ChatInterfaceProps {
 export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { user, loading: authLoading } = useAuth();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // Content buffer for slower streaming display
+  const contentBufferRef = useRef<string>('');
+  const displayIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const currentMessageIdRef = useRef<string | null>(null);
 
+  // Controlled content release - displays buffered content gradually
+  const startContentDisplay = useCallback((messageId: string) => {
+    currentMessageIdRef.current = messageId;
+
+    if (displayIntervalRef.current) {
+      clearInterval(displayIntervalRef.current);
+    }
+
+    displayIntervalRef.current = setInterval(() => {
+      if (contentBufferRef.current.length > 0) {
+        // Release 3-5 characters at a time for smoother appearance
+        const charsToRelease = Math.min(4, contentBufferRef.current.length);
+        const chunk = contentBufferRef.current.slice(0, charsToRelease);
+        contentBufferRef.current = contentBufferRef.current.slice(charsToRelease);
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId
+              ? { ...msg, text: msg.text + chunk }
+              : msg
+          )
+        );
+      }
+    }, 20); // ~50 chars per second for readable pace
+  }, []);
+
+  const stopContentDisplay = useCallback(() => {
+    if (displayIntervalRef.current) {
+      clearInterval(displayIntervalRef.current);
+      displayIntervalRef.current = null;
+    }
+    // Flush any remaining content immediately
+    if (contentBufferRef.current.length > 0 && currentMessageIdRef.current) {
+      const remaining = contentBufferRef.current;
+      contentBufferRef.current = '';
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === currentMessageIdRef.current
+            ? { ...msg, text: msg.text + remaining }
+            : msg
+        )
+      );
+    }
+    currentMessageIdRef.current = null;
+  }, []);
+
+  // Manual scroll to bottom function (user-triggered only)
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowScrollButton(false);
+  }, []);
+
+  // Check if user is at bottom of scroll container
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+    setShowScrollButton(!isAtBottom && messages.length > 0);
+  }, [messages.length]);
+
+  // Track scroll position - only on actual user scroll events
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
+  // Cleanup display interval on unmount
+  useEffect(() => {
+    return () => {
+      if (displayIntervalRef.current) {
+        clearInterval(displayIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Sample prompts for empty state
   const samplePrompts = [
@@ -132,15 +211,14 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
                     )
                   );
                 } else if (data.type === 'content') {
-                  // Append content chunk to message
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? { ...msg, text: msg.text + data.content }
-                        : msg
-                    )
-                  );
+                  // Add to buffer for controlled release (slower display)
+                  contentBufferRef.current += data.content;
+                  if (!displayIntervalRef.current) {
+                    startContentDisplay(assistantMessageId);
+                  }
                 } else if (data.type === 'done') {
+                  // Stop content buffer and flush remaining content
+                  stopContentDisplay();
                   // Add citations and final metadata (cards already added above)
                   setMessages((prev) =>
                     prev.map((msg) =>
@@ -153,6 +231,7 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
                     )
                   );
                 } else if (data.type === 'error') {
+                  stopContentDisplay();
                   throw new Error(data.error);
                 }
               } catch (parseError) {
@@ -164,6 +243,7 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      stopContentDisplay();
       // Update the assistant message with error
       setMessages((prev) =>
         prev.map((msg) =>
@@ -243,7 +323,10 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
       </header>
 
       {/* RESULTS SECTION - Scrollable */}
-      <main className="flex-1 container max-w-4xl mx-auto px-4">
+      <main
+        ref={scrollContainerRef}
+        className="flex-1 container max-w-4xl mx-auto px-4 overflow-auto relative"
+      >
         {messages.length === 0 ? (
           // Empty state
           <div className="flex items-center justify-center py-20">
@@ -303,6 +386,30 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
             <div ref={messagesEndRef} />
           </div>
         )}
+
+        {/* Scroll to bottom button */}
+        <AnimatePresence>
+          {showScrollButton && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              onClick={scrollToBottom}
+              className={cn(
+                'fixed bottom-6 right-6 z-50',
+                'flex items-center justify-center',
+                'w-12 h-12 rounded-full',
+                'bg-primary text-white shadow-lg',
+                'hover:bg-primary/90 hover:shadow-xl',
+                'transition-all duration-200',
+                'border border-primary/20'
+              )}
+              aria-label="Scroll to bottom"
+            >
+              <ChevronDown className="h-6 w-6" />
+            </motion.button>
+          )}
+        </AnimatePresence>
       </main>
 
     </div>

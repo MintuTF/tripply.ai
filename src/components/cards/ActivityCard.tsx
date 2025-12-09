@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { PlaceCard } from '@/types';
 import { cn } from '@/lib/utils';
-import { Star, MapPin, ExternalLink, Plus, Bookmark, Activity, Clock } from 'lucide-react';
+import { MapPin, Plus, Clock, Ticket } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { RatingBadge } from './RatingBadge';
 
 interface ActivityCardProps {
   card: PlaceCard;
@@ -13,15 +14,46 @@ interface ActivityCardProps {
   onClick?: (card: PlaceCard) => void;
 }
 
-export function ActivityCard({ card, onAddToTrip, onSave, onClick }: ActivityCardProps) {
-  const [isSaved, setIsSaved] = useState(false);
-  const [isAdded, setIsAdded] = useState(false);
+// Curated activity/attraction placeholder images
+const ACTIVITY_IMAGES = [
+  'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1507608616759-54f48f0af0ee?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=400&h=300&fit=crop',
+];
 
-  const handleSave = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsSaved(!isSaved);
-    onSave?.(card);
+function getActivityImage(id: string): string {
+  const index = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % ACTIVITY_IMAGES.length;
+  return ACTIVITY_IMAGES[index];
+}
+
+function extractLocation(address?: string): string {
+  if (!address) return 'Location unavailable';
+  const parts = address.split(',').map(p => p.trim());
+  if (parts.length >= 2) {
+    return parts.slice(-2).join(', ');
+  }
+  return address;
+}
+
+function formatPrice(price?: number, currency: string = 'USD'): string {
+  if (!price) return '';
+  const symbols: Record<string, string> = {
+    USD: '$',
+    EUR: '\u20AC',
+    GBP: '\u00A3',
+    JPY: '\u00A5',
+    AUD: 'A$',
+    CAD: 'C$',
   };
+  const symbol = symbols[currency] || currency + ' ';
+  return `${symbol}${Math.round(price).toLocaleString()}`;
+}
+
+export function ActivityCard({ card, onAddToTrip, onClick }: ActivityCardProps) {
+  const [isAdded, setIsAdded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const handleAddToTrip = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -30,156 +62,101 @@ export function ActivityCard({ card, onAddToTrip, onSave, onClick }: ActivityCar
     setTimeout(() => setIsAdded(false), 2000);
   };
 
-  const mainImage = card.photos[0] || '/placeholder-activity.jpg';
+  const mainImage = card.photos?.[0] || getActivityImage(card.id);
+  const fallbackImage = 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=400&h=300&fit=crop';
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.3 }}
       onClick={() => onClick?.(card)}
       className={cn(
-        'group relative overflow-hidden rounded-2xl bg-card border-2 border-border/50',
-        'cursor-pointer transition-all duration-300',
-        'hover:border-primary/50 hover:shadow-depth hover:-translate-y-1',
-        'backdrop-blur-sm'
+        'group relative overflow-hidden rounded-xl bg-card',
+        'cursor-pointer transition-all duration-200',
+        'shadow-md hover:shadow-xl hover:scale-[1.02]',
+        'border border-border/30'
       )}
     >
       {/* Image Section */}
-      <div className="relative h-48 overflow-hidden bg-muted">
+      <div className="relative h-40 overflow-hidden bg-muted">
         <img
-          src={mainImage}
+          src={imageError ? fallbackImage : mainImage}
           alt={card.name}
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-          onError={(e) => {
-            e.currentTarget.src = '/placeholder-activity.jpg';
-          }}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          onError={() => setImageError(true)}
         />
-
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-
-        {/* Quick Actions - Top Right */}
-        <div className="absolute right-3 top-3 flex gap-2 opacity-0 transition-all duration-300 group-hover:opacity-100">
-          <button
-            onClick={handleSave}
-            className={cn(
-              'rounded-full p-2.5 shadow-lg backdrop-blur-md transition-all duration-300',
-              'hover:scale-110',
-              isSaved
-                ? 'bg-primary text-white shadow-primary/50'
-                : 'bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300'
-            )}
-            title="Save for later"
-          >
-            <Bookmark className={cn('h-4 w-4', isSaved && 'fill-current')} />
-          </button>
-        </div>
-
-        {/* Activity Badge - Top Left */}
-        <div className="absolute left-3 top-3">
-          <span className="rounded-full bg-white/90 dark:bg-gray-800/90 px-3 py-1 text-xs font-semibold text-foreground backdrop-blur-md flex items-center gap-1.5">
-            <Activity className="h-3 w-3" />
-            Activity
-          </span>
-        </div>
-
-        {/* Rating - Bottom Left on Image */}
-        {card.rating && (
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-gray-800/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
-            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-            <span className="text-sm font-bold text-foreground">{card.rating.toFixed(1)}</span>
-          </div>
-        )}
       </div>
 
       {/* Content Section */}
-      <div className="p-4">
-        {/* Title */}
-        <h3 className="mb-2 text-base font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
+      <div className="p-4 space-y-3">
+        {/* Activity Name */}
+        <h3 className="text-lg font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
           {card.name}
         </h3>
 
-        {/* Address */}
-        {card.address && (
-          <div className="mb-3 flex items-start gap-2">
-            <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-0.5" />
-            <p className="text-xs text-muted-foreground line-clamp-2">
-              {card.address}
-            </p>
-          </div>
+        {/* Location */}
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="line-clamp-1">{extractLocation(card.address)}</span>
+        </div>
+
+        {/* Rating Badge */}
+        {card.rating && (
+          <RatingBadge
+            rating={card.rating}
+            reviewCount={card.review_count}
+            size="sm"
+          />
         )}
 
-        {/* Duration */}
-        {card.duration && (
-          <div className="mb-3 flex items-center gap-1.5 text-xs text-foreground/80">
-            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{card.duration}</span>
-          </div>
-        )}
+        {/* Duration & Price Row */}
+        <div className="flex items-center gap-4 text-sm">
+          {card.duration && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>{card.duration}</span>
+            </div>
+          )}
+          {card.price && (
+            <div className="flex items-center gap-1.5 text-green-600 font-semibold">
+              <Ticket className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>{formatPrice(card.price, card.currency)}</span>
+            </div>
+          )}
+        </div>
 
         {/* Description */}
         {card.description && (
-          <p className="mb-3 text-sm text-foreground/80 line-clamp-2">
+          <p className="text-xs text-muted-foreground line-clamp-2">
             {card.description}
           </p>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 pt-2">
-          <button
-            onClick={handleAddToTrip}
-            disabled={isAdded}
-            className={cn(
-              'flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold',
-              'transition-all duration-300',
-              isAdded
-                ? 'bg-green-500 text-white'
-                : 'gradient-primary text-white shadow-lg hover:shadow-xl hover:scale-[1.02]'
-            )}
-          >
-            {isAdded ? (
-              <>
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                >
-                  ✓
-                </motion.div>
-                <span>Added!</span>
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4" />
-                <span>Add to Trip</span>
-              </>
-            )}
-          </button>
-
-          {card.url && (
-            <a
-              href={card.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center justify-center rounded-xl border-2 border-border/50 bg-card px-3 py-2.5 text-sm font-semibold transition-all duration-300 hover:border-primary/50 hover:bg-primary/5"
-              title="View details"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </a>
+        {/* CTA Button */}
+        <button
+          onClick={handleAddToTrip}
+          disabled={isAdded}
+          className={cn(
+            'w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold',
+            'transition-all duration-200',
+            isAdded
+              ? 'bg-green-500 text-white'
+              : 'bg-primary text-white hover:bg-primary/90'
           )}
-        </div>
+        >
+          {isAdded ? (
+            <span>Added!</span>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              <span>Shortlist</span>
+            </>
+          )}
+        </button>
       </div>
-
-      {/* Hover Lift Effect */}
-      <div className="absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 pointer-events-none"
-        style={{
-          boxShadow: '0 20px 60px -10px rgba(0, 0, 0, 0.3)',
-        }}
-      />
     </motion.div>
   );
 }

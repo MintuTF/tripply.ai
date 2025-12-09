@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { PlaceCard } from '@/types';
 import { cn } from '@/lib/utils';
-import { Star, Heart, MapPin, ExternalLink, Plus, Bookmark, Utensils, Clock } from 'lucide-react';
+import { MapPin, Plus, Utensils, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { RatingBadge } from './RatingBadge';
 
 interface RestaurantCardProps {
   card: PlaceCard;
@@ -13,15 +14,37 @@ interface RestaurantCardProps {
   onClick?: (card: PlaceCard) => void;
 }
 
-export function RestaurantCard({ card, onAddToTrip, onSave, onClick }: RestaurantCardProps) {
-  const [isSaved, setIsSaved] = useState(false);
-  const [isAdded, setIsAdded] = useState(false);
+// Curated restaurant placeholder images
+const RESTAURANT_IMAGES = [
+  'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1537047902294-62a40c20a6ae?w=400&h=300&fit=crop',
+  'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&h=300&fit=crop',
+];
 
-  const handleSave = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsSaved(!isSaved);
-    onSave?.(card);
-  };
+function getRestaurantImage(id: string): string {
+  const index = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % RESTAURANT_IMAGES.length;
+  return RESTAURANT_IMAGES[index];
+}
+
+function extractLocation(address?: string): string {
+  if (!address) return 'Location unavailable';
+  const parts = address.split(',').map(p => p.trim());
+  if (parts.length >= 2) {
+    return parts.slice(-2).join(', ');
+  }
+  return address;
+}
+
+function getPriceLevelDisplay(priceLevel?: number): string {
+  if (!priceLevel) return '';
+  return '$'.repeat(priceLevel);
+}
+
+export function RestaurantCard({ card, onAddToTrip, onClick }: RestaurantCardProps) {
+  const [isAdded, setIsAdded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const handleAddToTrip = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -30,162 +53,101 @@ export function RestaurantCard({ card, onAddToTrip, onSave, onClick }: Restauran
     setTimeout(() => setIsAdded(false), 2000);
   };
 
-  const mainImage = card.photos[0] || '/placeholder-restaurant.jpg';
+  const mainImage = card.photos?.[0] || getRestaurantImage(card.id);
+  const fallbackImage = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop';
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.3 }}
       onClick={() => onClick?.(card)}
       className={cn(
-        'group relative overflow-hidden rounded-2xl bg-card border-2 border-border/50',
-        'cursor-pointer transition-all duration-300',
-        'hover:border-primary/50 hover:shadow-depth hover:-translate-y-1',
-        'backdrop-blur-sm'
+        'group relative overflow-hidden rounded-xl bg-card',
+        'cursor-pointer transition-all duration-200',
+        'shadow-md hover:shadow-xl hover:scale-[1.02]',
+        'border border-border/30'
       )}
     >
       {/* Image Section */}
-      <div className="relative h-48 overflow-hidden bg-muted">
+      <div className="relative h-40 overflow-hidden bg-muted">
         <img
-          src={mainImage}
+          src={imageError ? fallbackImage : mainImage}
           alt={card.name}
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-          onError={(e) => {
-            e.currentTarget.src = '/placeholder-restaurant.jpg';
-          }}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          onError={() => setImageError(true)}
         />
-
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-
-        {/* Quick Actions - Top Right */}
-        <div className="absolute right-3 top-3 flex gap-2 opacity-0 transition-all duration-300 group-hover:opacity-100">
-          <button
-            onClick={handleSave}
-            className={cn(
-              'rounded-full p-2.5 shadow-lg backdrop-blur-md transition-all duration-300',
-              'hover:scale-110',
-              isSaved
-                ? 'bg-primary text-white shadow-primary/50'
-                : 'bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300'
-            )}
-            title="Save for later"
-          >
-            <Bookmark className={cn('h-4 w-4', isSaved && 'fill-current')} />
-          </button>
-        </div>
-
-        {/* Cuisine Badge - Top Left */}
-        {card.cuisine_type && (
-          <div className="absolute left-3 top-3">
-            <span className="rounded-full bg-white/90 dark:bg-gray-800/90 px-3 py-1 text-xs font-semibold text-foreground backdrop-blur-md flex items-center gap-1.5">
-              <Utensils className="h-3 w-3" />
-              {card.cuisine_type}
-            </span>
-          </div>
-        )}
-
-        {/* Rating & Price - Bottom Left on Image */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-2">
-          {card.rating && (
-            <div className="flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-gray-800/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
-              <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-              <span className="text-sm font-bold text-foreground">{card.rating.toFixed(1)}</span>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Content Section */}
-      <div className="p-4">
-        {/* Title */}
-        <h3 className="mb-2 text-base font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
-          {card.name}
-        </h3>
+      <div className="p-4 space-y-3">
+        {/* Restaurant Name & Cuisine */}
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-lg font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
+            {card.name}
+          </h3>
+          {card.price_level && (
+            <span className="text-sm font-semibold text-green-600 flex-shrink-0">
+              {getPriceLevelDisplay(card.price_level)}
+            </span>
+          )}
+        </div>
 
-        {/* Address */}
-        {card.address && (
-          <div className="mb-3 flex items-start gap-2">
-            <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-0.5" />
-            <p className="text-xs text-muted-foreground line-clamp-2">
-              {card.address}
-            </p>
+        {/* Cuisine Type */}
+        {card.cuisine_type && (
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Utensils className="h-3.5 w-3.5 flex-shrink-0" />
+            <span>{card.cuisine_type}</span>
           </div>
+        )}
+
+        {/* Location */}
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="line-clamp-1">{extractLocation(card.address)}</span>
+        </div>
+
+        {/* Rating Badge */}
+        {card.rating && (
+          <RatingBadge
+            rating={card.rating}
+            reviewCount={card.review_count}
+            size="sm"
+          />
         )}
 
         {/* Opening Hours */}
         {card.opening_hours && (
-          <div className="mb-3 flex items-start gap-2">
-            <Clock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-0.5" />
-            <p className="text-xs text-muted-foreground line-clamp-1">
-              {card.opening_hours.split(',')[0]}
-            </p>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3 flex-shrink-0" />
+            <span className="line-clamp-1">{card.opening_hours.split(',')[0]}</span>
           </div>
         )}
 
-        {/* Description */}
-        {card.description && (
-          <p className="mb-3 text-sm text-foreground/80 line-clamp-2">
-            {card.description}
-          </p>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex gap-2 pt-2">
-          <button
-            onClick={handleAddToTrip}
-            disabled={isAdded}
-            className={cn(
-              'flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold',
-              'transition-all duration-300',
-              isAdded
-                ? 'bg-green-500 text-white'
-                : 'gradient-primary text-white shadow-lg hover:shadow-xl hover:scale-[1.02]'
-            )}
-          >
-            {isAdded ? (
-              <>
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                >
-                  ✓
-                </motion.div>
-                <span>Added!</span>
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4" />
-                <span>Add to Trip</span>
-              </>
-            )}
-          </button>
-
-          {card.url && (
-            <a
-              href={card.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center justify-center rounded-xl border-2 border-border/50 bg-card px-3 py-2.5 text-sm font-semibold transition-all duration-300 hover:border-primary/50 hover:bg-primary/5"
-              title="View on Google Maps"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </a>
+        {/* CTA Button */}
+        <button
+          onClick={handleAddToTrip}
+          disabled={isAdded}
+          className={cn(
+            'w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold',
+            'transition-all duration-200',
+            isAdded
+              ? 'bg-green-500 text-white'
+              : 'bg-primary text-white hover:bg-primary/90'
           )}
-        </div>
+        >
+          {isAdded ? (
+            <span>Added!</span>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              <span>Shortlist</span>
+            </>
+          )}
+        </button>
       </div>
-
-      {/* Hover Lift Effect */}
-      <div className="absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 pointer-events-none"
-        style={{
-          boxShadow: '0 20px 60px -10px rgba(0, 0, 0, 0.3)',
-        }}
-      />
     </motion.div>
   );
 }
