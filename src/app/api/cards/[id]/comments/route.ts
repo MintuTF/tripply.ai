@@ -1,4 +1,4 @@
-import { createServerComponentClient } from '@/lib/db/supabase';
+import { createServerComponentClient } from '@/lib/db/supabase-server';
 import { NextResponse } from 'next/server';
 
 // GET /api/cards/[id]/comments - Get all comments for a card

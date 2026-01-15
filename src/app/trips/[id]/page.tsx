@@ -7,11 +7,15 @@ import { CompareDrawer } from '@/components/board/CompareDrawer';
 import { ChatBoard } from '@/components/chat-board/ChatBoard';
 import { ExportMenu } from '@/components/trip/ExportMenu';
 import { PrintableItinerary } from '@/components/trip/PrintableItinerary';
-import { Card, Trip } from '@/types';
+import { Card, Trip, TripView, SaveStatus, ConflictInfo } from '@/types';
 import { MarketplaceView } from '@/components/marketplace/MarketplaceView';
 import { MapView } from '@/components/board/MapView';
+import { useAutoSave } from '@/hooks/useAutoSave';
+import SaveIndicator from '@/components/board/SaveIndicator';
+import { ConflictModal } from '@/components/board/ConflictModal';
 import { PlacesSearchSidebar } from '@/components/map/PlacesSearchSidebar';
 import { FloatingCardDetail } from '@/components/map/FloatingCardDetail';
+import { ResearchView } from '@/components/research/ResearchView';
 import { Toast } from '@/components/ui/Toast';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { UserMenu } from '@/components/auth/UserMenu';
@@ -29,6 +33,7 @@ import {
   Save,
   ArrowLeft,
   Pencil,
+  Compass,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { recalculateTripTravelInfo } from '@/lib/utils/itinerary';
@@ -44,8 +49,8 @@ export default function TripPage({ params }: PageProps) {
   const router = useRouter();
 
   // Get initial view from URL or default to 'board'
-  const viewFromUrl = searchParams.get('view') as 'board' | 'map' | 'chat' | 'marketplace' | null;
-  const initialView = viewFromUrl && ['board', 'map', 'chat', 'marketplace'].includes(viewFromUrl) ? viewFromUrl : 'board';
+  const viewFromUrl = searchParams.get('view') as TripView | null;
+  const initialView: TripView = viewFromUrl && ['board', 'map', 'chat', 'marketplace', 'research'].includes(viewFromUrl) ? viewFromUrl : 'board';
 
   // Trip and cards state from database
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -56,10 +61,10 @@ export default function TripPage({ params }: PageProps) {
 
   // UI state
   const [compareCards, setCompareCards] = useState<Card[]>([]);
-  const [activeView, setActiveView] = useState<'board' | 'map' | 'chat' | 'marketplace'>(initialView);
+  const [activeView, setActiveView] = useState<TripView>(initialView);
 
   // Update URL when view changes
-  const handleViewChange = useCallback((view: 'board' | 'map' | 'chat' | 'marketplace') => {
+  const handleViewChange = useCallback((view: TripView) => {
     setActiveView(view);
     const params = new URLSearchParams(searchParams.toString());
     params.set('view', view);
@@ -72,6 +77,28 @@ export default function TripPage({ params }: PageProps) {
   const [searchLocation, setSearchLocation] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showEditTripModal, setShowEditTripModal] = useState(false);
+
+  // Auto-save state
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>({ state: 'saved' });
+  const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+
+  // Initialize auto-save hook
+  const autoSave = useAutoSave({
+    tripId: resolvedParams.id,
+    onStatusChange: setSaveStatus,
+    onError: (error) => {
+      console.error('Auto-save error:', error);
+      setToastMessage('Failed to save changes');
+    },
+    onConflict: (detectedConflicts) => {
+      setConflicts(detectedConflicts);
+      setShowConflictModal(true);
+    },
+    onSuccess: () => {
+      // Optionally show success toast, but auto-save indicator handles this
+    },
+  });
 
   // Fetch trip and cards from database
   useEffect(() => {
@@ -123,7 +150,7 @@ export default function TripPage({ params }: PageProps) {
     }
   }, [user, authLoading, trip, router]);
 
-  const handleCardUpdate = async (updatedCard: Card) => {
+  const handleCardUpdate = (updatedCard: Card) => {
     // Use functional update to properly handle multiple rapid updates
     setCards(prevCards => {
       const newCards = prevCards.map((c) => (c.id === updatedCard.id ? updatedCard : c));
@@ -133,34 +160,22 @@ export default function TripPage({ params }: PageProps) {
       return newCards;
     });
 
-    // Sync to database
-    try {
-      await fetch(`/api/cards/${updatedCard.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedCard),
-      });
-    } catch (err) {
-      console.error('Error updating card:', err);
-      setToastMessage('Failed to save changes');
-    }
+    // Determine priority based on what changed
+    const priority = updatedCard.day !== undefined || updatedCard.labels ? 'critical' :
+                     updatedCard.time_slot || updatedCard.travel_mode ? 'medium' : 'low';
+
+    // Queue for auto-save instead of immediate API call
+    autoSave.queueChange(updatedCard.id, updatedCard, priority);
   };
 
-  const handleCardDelete = async (cardId: string) => {
+  const handleCardDelete = (cardId: string) => {
     // Optimistic update
     const remaining = cards.filter((c) => c.id !== cardId);
     const recalculated = recalculateTripTravelInfo(remaining);
     setCards(recalculated);
 
-    // Sync to database
-    try {
-      await fetch(`/api/cards/${cardId}`, {
-        method: 'DELETE',
-      });
-    } catch (err) {
-      console.error('Error deleting card:', err);
-      setToastMessage('Failed to delete card');
-    }
+    // Queue deletion with critical priority (500ms debounce)
+    autoSave.queueDelete(cardId);
   };
 
   const handleCardDuplicate = async (card: Card) => {
@@ -214,7 +229,7 @@ export default function TripPage({ params }: PageProps) {
     }
   };
 
-  const handleAddCard = async (newCard: Card) => {
+  const handleAddCard = (newCard: Card) => {
     // Check if card already exists
     const exists = cards.some((c) => c.id === newCard.id);
     if (exists) {
@@ -231,30 +246,51 @@ export default function TripPage({ params }: PageProps) {
     // Only sync to database if card doesn't have a real ID (temp cards from guest mode)
     // Cards with real IDs were already saved by the component that created them
     if (!newCard.id || newCard.id.startsWith('temp-')) {
-      try {
-        await fetch('/api/cards', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            trip_id: resolvedParams.id,
-            type: newCard.type,
-            payload_json: newCard.payload_json,
-            labels: newCard.labels || ['considering'],
-            favorite: newCard.favorite || false,
-            day: newCard.day,
-            time_slot: newCard.time_slot,
-            order: newCard.order,
-          }),
-        });
-      } catch (err) {
-        console.error('Error adding card:', err);
-        setToastMessage('Failed to save card');
-      }
+      // Queue for auto-save with critical priority
+      autoSave.queueChange(newCard.id, newCard, 'critical');
     }
   };
 
   const handleCompare = (selectedCards: Card[]) => {
     setCompareCards(selectedCards);
+  };
+
+  const handleResolveConflicts = async (resolutions: Record<string, 'mine' | 'theirs'>) => {
+    // Handle conflict resolutions
+    for (const [cardId, resolution] of Object.entries(resolutions)) {
+      const conflict = conflicts.find(c => c.cardId === cardId);
+      if (!conflict) continue;
+
+      if (resolution === 'mine') {
+        // Keep local version - queue it with critical priority to overwrite server
+        const localCard = cards.find(c => c.id === cardId);
+        if (localCard) {
+          autoSave.queueChange(cardId, localCard, 'critical');
+        }
+      } else {
+        // Use server version - fetch and apply it
+        try {
+          const response = await fetch(`/api/cards/${cardId}`);
+          if (response.ok) {
+            const data = await response.json();
+            const serverCard = data.card;
+            // Update local state with server version
+            setCards(prevCards => {
+              const newCards = prevCards.map(c => c.id === cardId ? serverCard : c);
+              return recalculateTripTravelInfo(newCards);
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching server version:', err);
+          setToastMessage('Failed to fetch server version');
+        }
+      }
+    }
+
+    // Clear conflicts
+    setConflicts([]);
+    setShowConflictModal(false);
+    setToastMessage('Conflicts resolved');
   };
 
   const handleTripUpdate = async (updates: Partial<Trip>) => {
@@ -393,7 +429,7 @@ export default function TripPage({ params }: PageProps) {
             {/* Export Menu - only show when authenticated */}
             {user && <ExportMenu trip={trip} cards={cards} />}
 
-            <div className="flex rounded-xl border-2 border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+            <div className="flex rounded-xl border-2 border-border/50 bg-card/50 backdrop-blur-sm overflow-x-auto scrollbar-hide">
               <button
                 onClick={() => handleViewChange('map')}
                 className={cn(
@@ -442,7 +478,26 @@ export default function TripPage({ params }: PageProps) {
                 <ShoppingBag className="h-4 w-4" />
                 Shop
               </button>
+              <button
+                onClick={() => handleViewChange('research')}
+                className={cn(
+                  'flex items-center gap-2 border-l-2 border-border/50 px-5 py-2.5 text-sm font-semibold transition-all duration-300',
+                  activeView === 'research'
+                    ? 'gradient-primary text-white shadow-lg'
+                    : 'hover:bg-accent/50'
+                )}
+              >
+                <Compass className="h-4 w-4" />
+                Research
+              </button>
             </div>
+
+            {/* Save Indicator */}
+            <SaveIndicator
+              status={saveStatus}
+              onRetry={() => autoSave.retryFailed()}
+              onResolveConflicts={() => setShowConflictModal(true)}
+            />
 
             {/* Compare Button */}
             {cards.filter((c) => c.favorite).length > 1 && (
@@ -518,7 +573,7 @@ export default function TripPage({ params }: PageProps) {
               searchLocation={searchLocation}
             />
           </div>
-        ) : (
+        ) : activeView === 'marketplace' ? (
           <MarketplaceView
             tripContext={{
               destination: trip.destination?.name,
@@ -532,7 +587,16 @@ export default function TripPage({ params }: PageProps) {
               hasChildren: (trip.party_json?.children || 0) > 0,
             }}
           />
-        )}
+        ) : activeView === 'research' ? (
+          <ResearchView
+            tripId={resolvedParams.id}
+            trip={trip}
+            cards={cards}
+            onCardUpdate={handleCardUpdate}
+            onCardDelete={handleCardDelete}
+            onAddCard={handleAddCard}
+          />
+        ) : null}
       </main>
 
       {/* Compare Drawer */}
@@ -573,6 +637,14 @@ export default function TripPage({ params }: PageProps) {
         onCreateTrip={handleEditTrip}
         mode="edit"
         existingTrip={trip}
+      />
+
+      {/* Conflict Resolution Modal */}
+      <ConflictModal
+        conflicts={conflicts}
+        isOpen={showConflictModal}
+        onClose={() => setShowConflictModal(false)}
+        onResolve={handleResolveConflicts}
       />
 
       {/* Toast Notification */}

@@ -1,150 +1,29 @@
-import { searchPlaces } from '@/lib/tools/places';
 import { checkRateLimit, getClientIP, createRateLimitHeaders } from '@/lib/rate-limit';
-import { NextResponse } from 'next/server';
-import type { Card, CardType, PlaceResult } from '@/types';
+import { NextRequest, NextResponse } from 'next/server';
 
-// Simple in-memory cache for development
+const PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
+
+// Cache for places search results
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Format cuisine type from Google Places types array
- */
-function formatCuisineType(types: string[]): string {
-  // Filter out generic types that don't describe cuisine
-  const genericTypes = [
-    'restaurant', 'food', 'establishment', 'point_of_interest', 'store',
-    'locality', 'political', 'premise', 'route', 'street_address'
-  ];
-  const cuisineTypes = types.filter(t => !genericTypes.includes(t));
-
-  if (cuisineTypes.length > 0) {
-    // Format the first cuisine type (e.g., "mexican_restaurant" -> "Mexican Restaurant")
-    return cuisineTypes[0]
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
-  }
-
-  if (types.includes('bar')) return 'Bar & Grill';
-  if (types.includes('cafe')) return 'Café';
-  if (types.includes('bakery')) return 'Bakery';
-  if (types.includes('meal_takeaway')) return 'Takeaway';
-  if (types.includes('meal_delivery')) return 'Delivery';
-  return 'Restaurant';
-}
-
-/**
- * Format spot/attraction type from Google Places types array
- */
-function formatSpotType(types: string[]): string {
-  // Filter out generic types that don't describe the attraction
-  const genericTypes = [
-    'point_of_interest', 'establishment', 'locality', 'political',
-    'premise', 'route', 'street_address', 'store', 'health'
-  ];
-  const spotTypes = types.filter(t => !genericTypes.includes(t));
-
-  if (spotTypes.length > 0) {
-    return spotTypes[0]
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
-  }
-
-  return 'Attraction';
-}
-
-/**
- * Convert PlaceResult to Card format
- */
-function placeResultToCard(place: PlaceResult, tripId: string): Omit<Card, 'created_at' | 'updated_at'> {
-  // Debug logging for photos
-  console.log(`[Card] ${place.name}: types=${place.types.join(',')} photos=${place.photos?.length || 0}`);
-
-  // Determine card type from place types
-  let cardType: CardType = 'spot';
-  let payload: any;
-
-  if (place.types.some(t => ['lodging', 'hotel'].includes(t))) {
-    cardType = 'hotel';
-    payload = {
-      place_id: place.place_id,
-      name: place.name,
-      address: place.address,
-      coordinates: place.coordinates,
-      cost: place.price_level
-        ? place.price_level * 50
-        : 100,
-      rating: place.rating,
-      review_count: place.review_count,
-      amenities: [],
-      photos: place.photos || [],
-      url: place.url,
-    };
-  } else if (place.types.some(t => ['restaurant', 'food', 'cafe', 'bar'].includes(t))) {
-    cardType = 'food';
-    payload = {
-      place_id: place.place_id,
-      name: place.name,
-      address: place.address,
-      coordinates: place.coordinates,
-      cuisine_type: formatCuisineType(place.types),
-      price_level: place.price_level || 2,
-      rating: place.rating,
-      review_count: place.review_count,
-      photos: place.photos || [],
-      opening_hours: place.opening_hours,
-      url: place.url,
-      dietary_tags: [],
-    };
-  } else {
-    // "Things to Do" - includes both attractions and activities
-    cardType = 'spot';
-    payload = {
-      place_id: place.place_id,
-      name: place.name,
-      address: place.address,
-      coordinates: place.coordinates,
-      type: formatSpotType(place.types),
-      rating: place.rating,
-      review_count: place.review_count,
-      photos: place.photos || [],
-      opening_hours: place.opening_hours,
-      url: place.url,
-      description: '',
-      cost: place.price_level ? place.price_level * 25 : 0,
-    };
-  }
-
-  return {
-    id: place.place_id || `place-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    trip_id: tripId,
-    type: cardType,
-    payload_json: payload,
-    labels: [],
-    favorite: false,
-  };
-}
-
-/**
  * GET /api/places/search
- * Search for places using Google Places API
+ * Search for places near a location using Google Places Nearby Search API
  *
  * Query params:
- * - location (required): City or location name (e.g., "Paris, France")
- * - query (optional): Search query (e.g., "italian restaurant")
- * - type (optional): Place type (hotel, restaurant, attraction, cafe, bar, all)
- * - trip_id (optional): Trip ID to associate cards with
- * - min_rating (optional): Minimum rating filter (1-5)
- * - price_level (optional): Comma-separated price levels (1,2,3,4)
- * - radius (optional): Search radius in meters (default: 5000)
+ * - lat (required): Latitude
+ * - lng (required): Longitude
+ * - type (optional): Place type filter (restaurant, tourist_attraction, lodging, etc.)
+ * - radius (optional): Search radius in meters (default: 5000, max: 50000)
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     // Rate limiting
     const clientIP = getClientIP(request);
     const rateLimitResult = checkRateLimit(`places-search:${clientIP}`, {
       windowMs: 60 * 1000, // 1 minute
-      maxRequests: 30, // 30 requests per minute
+      maxRequests: 20, // 20 requests per minute
     });
 
     if (!rateLimitResult.allowed) {
@@ -157,78 +36,131 @@ export async function GET(request: Request) {
       );
     }
 
-    const { searchParams } = new URL(request.url);
-
-    const location = searchParams.get('location');
-    const query = searchParams.get('query') || '';
-    const type = searchParams.get('type') || 'all';
-    const tripId = searchParams.get('trip_id') || 'temp';
-    const minRating = searchParams.get('min_rating');
-    const priceLevelParam = searchParams.get('price_level');
-    const radius = searchParams.get('radius');
-
-    if (!location) {
+    if (!PLACES_API_KEY) {
       return NextResponse.json(
-        { error: 'location parameter is required' },
+        { error: 'Google Places API key not configured' },
+        { status: 500, headers: createRateLimitHeaders(rateLimitResult) }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const lat = searchParams.get('lat');
+    const lng = searchParams.get('lng');
+    const type = searchParams.get('type') || undefined;
+    const radius = Math.min(
+      parseInt(searchParams.get('radius') || '5000'),
+      50000
+    );
+
+    if (!lat || !lng) {
+      return NextResponse.json(
+        { error: 'Latitude and longitude are required' },
         { status: 400, headers: createRateLimitHeaders(rateLimitResult) }
       );
     }
 
-    // Build cache key
-    const cacheKey = `${location}:${query}:${type}:${minRating}:${priceLevelParam}:${radius}`;
+    // Validate lat/lng
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+
+    if (isNaN(latitude) || isNaN(longitude)) {
+      return NextResponse.json(
+        { error: 'Invalid latitude or longitude' },
+        { status: 400, headers: createRateLimitHeaders(rateLimitResult) }
+      );
+    }
+
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return NextResponse.json(
+        { error: 'Latitude or longitude out of range' },
+        { status: 400, headers: createRateLimitHeaders(rateLimitResult) }
+      );
+    }
 
     // Check cache
+    const cacheKey = `${lat},${lng},${type || 'all'},${radius}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return NextResponse.json(cached.data, {
         headers: {
-          'Cache-Control': 'public, max-age=300', // 5 minutes
+          'Cache-Control': 'public, max-age=300',
           'X-Cache': 'HIT',
           ...createRateLimitHeaders(rateLimitResult),
         },
       });
     }
 
-    // Parse filters
-    const priceLevel = priceLevelParam
-      ? priceLevelParam.split(',').map(Number).filter(n => n >= 1 && n <= 4)
-      : undefined;
+    // Build API URL for Places Nearby Search
+    const placesUrl = new URL('https://maps.googleapis.com/maps/api/place/nearbysearch/json');
+    placesUrl.searchParams.set('location', `${latitude},${longitude}`);
+    placesUrl.searchParams.set('radius', radius.toString());
+    placesUrl.searchParams.set('key', PLACES_API_KEY);
 
-    let cards: Omit<Card, 'created_at' | 'updated_at'>[] = [];
-    let sources: string[] = [];
+    if (type) {
+      placesUrl.searchParams.set('type', type);
+    }
 
-    // Use Google Places API for all search types
-    console.log(`[Route] Searching Google Places for type: ${type}`);
-    const result = await searchPlaces({
-      query: query || type,
-      location,
-      type,
-      radius: radius ? parseInt(radius) : 5000,
-      price_level: priceLevel,
-      min_rating: minRating ? parseFloat(minRating) : undefined,
-    });
+    // Call Google Places Nearby Search API
+    const response = await fetch(placesUrl.toString());
+    const data = await response.json();
 
-    if (!result.success) {
+    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      console.error('Places API error:', data.status, data.error_message);
       return NextResponse.json(
-        { error: result.error || 'Failed to search places' },
-        { status: 500 }
+        { error: `Places search failed: ${data.status}` },
+        { status: 500, headers: createRateLimitHeaders(rateLimitResult) }
       );
     }
 
-    cards = (result.data || []).map(place => placeResultToCard(place, tripId));
-    sources = result.sources || ['Google Places'];
-    console.log(`[Route] Google Places returned ${cards.length} results`);
+    // Transform results to match our PlaceCard interface
+    const places = (data.results || []).map((place: any) => {
+      // Determine place type based on Google types
+      let placeType = 'attraction';
+      if (place.types?.includes('restaurant') || place.types?.includes('cafe') || place.types?.includes('food')) {
+        placeType = 'restaurant';
+      } else if (place.types?.includes('lodging') || place.types?.includes('hotel')) {
+        placeType = 'hotel';
+      } else if (place.types?.includes('museum') || place.types?.includes('art_gallery') || place.types?.includes('park')) {
+        placeType = 'activity';
+      } else if (place.types?.includes('tourist_attraction') || place.types?.includes('point_of_interest')) {
+        placeType = 'attraction';
+      }
+
+      // Build photo URLs if available
+      const photos = place.photos?.slice(0, 3).map((photo: any) => {
+        const photoReference = photo.photo_reference;
+        return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photoReference}&key=${PLACES_API_KEY}`;
+      }) || [];
+
+      return {
+        id: place.place_id,
+        type: placeType,
+        name: place.name,
+        address: place.vicinity || place.formatted_address || '',
+        photos,
+        rating: place.rating || undefined,
+        review_count: place.user_ratings_total || undefined,
+        price_level: place.price_level || undefined,
+        description: place.editorial_summary?.overview || undefined,
+        location: {
+          lat: place.geometry.location.lat,
+          lng: place.geometry.location.lng,
+        },
+        is_open: place.opening_hours?.open_now,
+        types: place.types || [],
+      };
+    });
 
     const responseData = {
-      cards,
-      sources,
-      timestamp: new Date().toISOString(),
+      places,
+      status: data.status,
+      next_page_token: data.next_page_token,
     };
 
     // Update cache
     cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
 
-    // Clean old cache entries (simple cleanup)
+    // Clean old cache entries
     if (cache.size > 100) {
       const oldestKeys = Array.from(cache.entries())
         .sort((a, b) => a[1].timestamp - b[1].timestamp)
@@ -239,7 +171,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(responseData, {
       headers: {
-        'Cache-Control': 'public, max-age=300', // 5 minutes
+        'Cache-Control': 'public, max-age=300',
         'X-Cache': 'MISS',
         ...createRateLimitHeaders(rateLimitResult),
       },

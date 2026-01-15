@@ -430,7 +430,7 @@ export default function TripsPage() {
                 <Sparkles className="h-5 w-5 text-white" />
               </div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-accent-foreground to-secondary bg-clip-text text-transparent">
-                Tripply
+                Voyagr
               </h1>
             </Link>
           </div>
@@ -468,7 +468,7 @@ export default function TripsPage() {
               <Sparkles className="h-5 w-5 text-white" />
             </div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-accent-foreground to-secondary bg-clip-text text-transparent">
-              Tripply
+              Voyagr
             </h1>
           </Link>
           <div className="flex items-center gap-3">

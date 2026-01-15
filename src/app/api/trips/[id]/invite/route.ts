@@ -1,6 +1,8 @@
-import { createServerComponentClient } from '@/lib/db/supabase';
+import { createServerComponentClient } from '@/lib/db/supabase-server';
 import { createShareLink, getTrip } from '@/lib/db/queries';
 import { NextResponse } from 'next/server';
+import { resend } from '@/lib/email/resend';
+import { getInvitationEmailHtml, getInvitationEmailText } from '@/lib/email/templates/invitation';
 
 // POST /api/trips/[id]/invite - Send email invitation
 export async function POST(
@@ -65,27 +67,48 @@ export async function POST(
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const inviteUrl = `${baseUrl}/shared/${shareLink.token}`;
 
-    // TODO: Integrate with email service (Resend, SendGrid, etc.)
-    // For now, we'll just log the invitation and return success
-    // In production, you would send an email like this:
-    //
-    // await resend.emails.send({
-    //   from: 'Tripply <noreply@tripply.ai>',
-    //   to: email,
-    //   subject: `${user.email} invited you to view their trip: ${trip.title}`,
-    //   html: `
-    //     <h2>You're invited to view a trip!</h2>
-    //     <p>${user.email} has invited you to view their trip "${trip.title}".</p>
-    //     <p><a href="${inviteUrl}">View Trip</a></p>
-    //   `
-    // });
+    // Send email invitation using Resend
+    if (process.env.RESEND_API_KEY) {
+      const fromEmail = process.env.EMAIL_FROM || 'Voyagr <onboarding@resend.dev>';
 
-    console.log('Email invitation would be sent:', {
-      to: email,
-      tripTitle: trip.title,
-      inviteUrl,
-      role,
-    });
+      try {
+        const { data: emailData, error: emailError } = await resend.emails.send({
+          from: fromEmail,
+          to: email,
+          subject: `You're invited to view "${trip.title}" on Voyagr`,
+          html: getInvitationEmailHtml({
+            inviterEmail: user.email || 'A Voyagr user',
+            tripTitle: trip.title,
+            role,
+            inviteUrl,
+          }),
+          text: getInvitationEmailText({
+            inviterEmail: user.email || 'A Voyagr user',
+            tripTitle: trip.title,
+            role,
+            inviteUrl,
+          }),
+        });
+
+        if (emailError) {
+          console.error('Failed to send invitation email:', emailError);
+          // Continue anyway - the share link was created successfully
+        } else {
+          console.log('Invitation email sent successfully:', emailData?.id);
+        }
+      } catch (emailErr) {
+        console.error('Error sending invitation email:', emailErr);
+        // Continue anyway - the share link was created successfully
+      }
+    } else {
+      console.warn('RESEND_API_KEY not configured, skipping email send');
+      console.log('Invitation created (email not sent):', {
+        to: email,
+        tripTitle: trip.title,
+        inviteUrl,
+        role,
+      });
+    }
 
     return NextResponse.json(
       {

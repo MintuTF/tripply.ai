@@ -1,101 +1,115 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTripContext } from '@/context/TripContext';
+import { TripContextBar } from './TripContextBar';
+import { TripContextModal } from './TripContextModal';
 import { FilterBar } from './FilterBar';
-import { HorizontalProductRow } from './HorizontalProductRow';
+import { RecommendedSection } from './sections/RecommendedSection';
+import { DontForgetSection } from './sections/DontForgetSection';
+import { ComfortUpgradesSection } from './sections/ComfortUpgradesSection';
+import { SmartAssistantCard } from './SmartAssistantCard';
+import { FloatingProductCart } from './FloatingProductCart';
 import {
-  Product,
   ProductRecommendation,
   MarketplaceTripContext,
   MarketplaceFilters,
-  CategoryKit,
-  ProductCategory,
+  TripContextSummary,
 } from '@/types/marketplace';
-import { CATEGORIES } from '@/lib/marketplace/categories';
-import { ShoppingBag, Loader2, MapPin } from 'lucide-react';
+import { getTripContextSummary } from '@/lib/marketplace/tripContextUtils';
+import { Loader2, ShoppingBag, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface MarketplaceViewProps {
   tripContext?: MarketplaceTripContext;
   onClose?: () => void;
 }
 
-interface RecommendationResponse {
-  recommendations: ProductRecommendation[];
-  smartKits: CategoryKit[];
-  categoryProducts: Record<ProductCategory, Product[]>;
-  tripSummary?: {
-    destination: string;
-    weather: string;
-    duration: string;
-  };
+interface SectionedRecommendationResponse {
+  topRecommendations: ProductRecommendation[];
+  dontForget: ProductRecommendation[];
+  comfortUpgrades: ProductRecommendation[];
+  tripContextSummary: TripContextSummary | null;
+  totalProducts: number;
 }
 
-// Destination type mappings for trip-specific recommendations
-const DESTINATION_KEYWORDS: Record<string, string[]> = {
-  beach: ['beach', 'hawaii', 'cancun', 'miami', 'bahamas', 'caribbean', 'maldives', 'fiji', 'bali', 'phuket', 'cabo', 'key west', 'san diego'],
-  desert: ['vegas', 'las vegas', 'phoenix', 'dubai', 'arizona', 'nevada', 'morocco', 'sahara', 'joshua tree', 'death valley', 'sedona'],
-  mountain: ['colorado', 'aspen', 'denver', 'switzerland', 'alps', 'rockies', 'montana', 'utah', 'jackson hole', 'whistler', 'banff'],
-  city: ['new york', 'london', 'paris', 'tokyo', 'rome', 'barcelona', 'chicago', 'san francisco', 'los angeles', 'seattle', 'boston', 'austin'],
-  tropical: ['costa rica', 'thailand', 'vietnam', 'philippines', 'indonesia', 'singapore', 'malaysia', 'puerto rico'],
-  cold: ['alaska', 'iceland', 'norway', 'finland', 'sweden', 'canada', 'russia', 'greenland'],
-};
-
-// Category priorities based on destination type
-const DESTINATION_CATEGORY_PRIORITIES: Record<string, ProductCategory[]> = {
-  beach: ['clothing', 'health', 'electronics', 'organization'],
-  desert: ['health', 'clothing', 'electronics', 'hydration'],
-  mountain: ['clothing', 'health', 'electronics', 'organization'],
-  city: ['electronics', 'organization', 'security', 'comfort'],
-  tropical: ['health', 'clothing', 'electronics', 'organization'],
-  cold: ['clothing', 'health', 'electronics', 'comfort'],
-  default: ['electronics', 'organization', 'health', 'comfort'],
-};
-
+/**
+ * MarketplaceView - Calm, travel-aware preparation assistant
+ * Redesigned in Phase 9 with sectioned layout and premium UX
+ */
 export function MarketplaceView({ tripContext, onClose }: MarketplaceViewProps) {
+  const { trip, cards } = useTripContext();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [recommendations, setRecommendations] = useState<ProductRecommendation[]>([]);
-  const [categoryProducts, setCategoryProducts] = useState<Record<string, Product[]>>({});
-  const [tripSummary, setTripSummary] = useState<RecommendationResponse['tripSummary']>();
+  const [topRecommendations, setTopRecommendations] = useState<ProductRecommendation[]>([]);
+  const [dontForget, setDontForget] = useState<ProductRecommendation[]>([]);
+  const [comfortUpgrades, setComfortUpgrades] = useState<ProductRecommendation[]>([]);
+  const [tripSummary, setTripSummary] = useState<TripContextSummary | null>(null);
   const [filters, setFilters] = useState<MarketplaceFilters>({});
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  // Get saved product IDs from cards
+  const savedProductIds = new Set(
+    cards?.filter(card => card.type === 'product').map(card => card.id) || []
+  );
 
   const fetchRecommendations = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
+      // Build trip context from TripContext
+      const contextPayload: MarketplaceTripContext = tripContext || {
+        destination: trip?.destination?.name,
+        destinationCoordinates: trip?.destination?.coordinates,
+        duration: trip?.dates ? Math.ceil(
+          (new Date(trip.dates.end).getTime() - new Date(trip.dates.start).getTime()) / (1000 * 60 * 60 * 24)
+        ) : undefined,
+        startDate: trip?.dates?.start,
+        endDate: trip?.dates?.end,
+        partySize: (trip?.party_json?.adults || 0) + (trip?.party_json?.children || 0) + (trip?.party_json?.infants || 0),
+        hasChildren: (trip?.party_json?.children || 0) > 0,
+        hasInfants: (trip?.party_json?.infants || 0) > 0,
+      };
+
       const response = await fetch('/api/marketplace/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tripContext, filters }),
+        body: JSON.stringify({
+          tripContext: contextPayload,
+          filters,
+          trip, // NEW: Pass full trip object for TripContextSummary
+        }),
       });
 
       if (!response.ok) {
         throw new Error('Failed to fetch recommendations');
       }
 
-      const data: RecommendationResponse = await response.json();
-      setRecommendations(data.recommendations || []);
-      setCategoryProducts(data.categoryProducts || {});
-      setTripSummary(data.tripSummary);
+      const data: SectionedRecommendationResponse = await response.json();
+      setTopRecommendations(data.topRecommendations || []);
+      setDontForget(data.dontForget || []);
+      setComfortUpgrades(data.comfortUpgrades || []);
+      setTripSummary(data.tripContextSummary || (trip ? getTripContextSummary(trip) : null));
     } catch (err) {
       console.error('Error fetching recommendations:', err);
       setError('Failed to load recommendations. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [tripContext, filters]);
+  }, [trip, tripContext, filters, cards]);
 
   useEffect(() => {
     fetchRecommendations();
   }, [fetchRecommendations]);
 
-  const handleFiltersChange = (newFilters: MarketplaceFilters) => {
+  const handleFiltersChange = useCallback((newFilters: MarketplaceFilters) => {
     setFilters(newFilters);
-  };
+  }, []);
 
   // Filter products based on current filters
-  const filterProducts = (products: (Product | ProductRecommendation)[]) => {
+  const filterProducts = (products: ProductRecommendation[]) => {
     return products.filter((product) => {
       if (filters.budgetTier && product.budgetTier !== filters.budgetTier) {
         return false;
@@ -110,7 +124,8 @@ export function MarketplaceView({ tripContext, onClose }: MarketplaceViewProps) 
         const matchesName = product.name.toLowerCase().includes(query);
         const matchesDescription = product.description?.toLowerCase().includes(query);
         const matchesTags = product.tags?.some((tag) => tag.toLowerCase().includes(query));
-        if (!matchesName && !matchesDescription && !matchesTags) {
+        const matchesBadges = product.smartBadges?.some((badge) => badge.toLowerCase().includes(query));
+        if (!matchesName && !matchesDescription && !matchesTags && !matchesBadges) {
           return false;
         }
       }
@@ -118,166 +133,143 @@ export function MarketplaceView({ tripContext, onClose }: MarketplaceViewProps) 
     });
   };
 
-  const filteredRecommendations = filterProducts(recommendations) as ProductRecommendation[];
+  const filteredTopRecommendations = filterProducts(topRecommendations);
+  const filteredDontForget = filterProducts(dontForget);
+  const filteredComfortUpgrades = filterProducts(comfortUpgrades);
 
-  // Get all filtered category products
-  const getFilteredCategoryProducts = () => {
-    const filtered: Record<string, Product[]> = {};
-    for (const category of CATEGORIES) {
-      const products = categoryProducts[category.id] || [];
-      const filteredProducts = filterProducts(products) as Product[];
-      if (filteredProducts.length > 0) {
-        filtered[category.id] = filteredProducts;
-      }
-    }
-    return filtered;
-  };
-
-  const filteredCategoryProducts = getFilteredCategoryProducts();
-
-  // Detect destination type from trip summary
-  const getDestinationType = (destination: string): string => {
-    const lowerDest = destination.toLowerCase();
-    for (const [type, keywords] of Object.entries(DESTINATION_KEYWORDS)) {
-      if (keywords.some((keyword) => lowerDest.includes(keyword))) {
-        return type;
-      }
-    }
-    return 'default';
-  };
-
-  // Get trip-specific products based on destination
-  const getTripSpecificProducts = (): Product[] => {
-    if (!tripSummary?.destination) return [];
-
-    const destType = getDestinationType(tripSummary.destination);
-    const priorityCategories = DESTINATION_CATEGORY_PRIORITIES[destType] || DESTINATION_CATEGORY_PRIORITIES.default;
-
-    const tripProducts: Product[] = [];
-    const seenIds = new Set<string>();
-
-    // Collect products from priority categories
-    for (const category of priorityCategories) {
-      const products = categoryProducts[category] || [];
-      for (const product of products) {
-        if (!seenIds.has(product.id) && tripProducts.length < 12) {
-          seenIds.add(product.id);
-          tripProducts.push(product);
-        }
-      }
-    }
-
-    return filterProducts(tripProducts) as Product[];
-  };
-
-  const tripSpecificProducts = getTripSpecificProducts();
   const hasAnyProducts =
-    filteredRecommendations.length > 0 || tripSpecificProducts.length > 0 || Object.keys(filteredCategoryProducts).length > 0;
+    filteredTopRecommendations.length > 0 ||
+    filteredDontForget.length > 0 ||
+    filteredComfortUpgrades.length > 0;
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      {/* Compact Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border/50 bg-card/50">
-        <ShoppingBag className="h-5 w-5 text-primary" />
-        <div>
-          <h2 className="font-semibold text-base">Smart Travel Marketplace</h2>
-          {tripSummary && (
-            <p className="text-xs text-muted-foreground">
-              Personalized for {tripSummary.destination}
-            </p>
-          )}
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-purple-50 to-pink-50">
+      {/* Trip Context Bar - Sticky at top */}
+      <TripContextBar onEditClick={() => setShowEditModal(true)} />
 
-      {/* Compact Filter Bar */}
+      {/* Filter Bar - Sticky below trip context */}
       <FilterBar onFiltersChange={handleFiltersChange} initialFilters={filters} />
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      {/* Main Content */}
+      <div className="relative">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-            <p className="text-sm text-muted-foreground">Loading products...</p>
+          <div className="flex flex-col items-center justify-center py-24">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex flex-col items-center gap-4"
+            >
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full blur-xl opacity-50 animate-pulse" />
+                <div className="relative w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg">
+                  <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 font-medium">Finding perfect gear for your trip...</p>
+            </motion.div>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <p className="text-destructive text-sm mb-4">{error}</p>
-            <button
-              onClick={fetchRecommendations}
-              className="px-4 py-2 rounded-lg bg-primary text-white text-sm hover:bg-primary/90 transition-colors"
-            >
-              Try Again
-            </button>
+          <div className="flex flex-col items-center justify-center py-24 px-4">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center border border-red-100">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <p className="text-red-600 text-sm mb-6">{error}</p>
+              <button
+                onClick={fetchRecommendations}
+                className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium hover:shadow-lg transition-all"
+              >
+                Try Again
+              </button>
+            </div>
           </div>
         ) : !hasAnyProducts ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <ShoppingBag className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="font-medium text-base mb-2">No products found</h3>
-            <p className="text-muted-foreground text-sm">
-              Try adjusting your filters to see more products
-            </p>
+          <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 border border-gray-100"
+            >
+              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+                <ShoppingBag className="h-8 w-8 text-purple-600" />
+              </div>
+              <h3 className="font-semibold text-lg text-gray-900 mb-2">No products found</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Try adjusting your filters to see more recommendations
+              </p>
+              <button
+                onClick={() => setFilters({})}
+                className="px-6 py-2.5 rounded-xl border border-purple-200 text-purple-700 text-sm font-medium hover:bg-purple-50 transition-colors"
+              >
+                Clear Filters
+              </button>
+            </motion.div>
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* Top Picks / Recommendations */}
-            {filteredRecommendations.length > 0 && (
-              <HorizontalProductRow
-                title="Top Picks for You"
-                products={filteredRecommendations}
-              />
-            )}
-
-            {/* Trip-Specific Section */}
-            {tripSpecificProducts.length > 0 && tripSummary?.destination && (
-              <div className="relative">
-                <div className="absolute -left-4 top-0 bottom-0 w-1 bg-gradient-to-b from-primary/50 to-primary/10 rounded-full" />
-                <div className="flex items-center gap-2 mb-3 pl-1">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <h3 className="font-semibold text-base text-foreground">
-                    Popular with travelers to {tripSummary.destination}
-                  </h3>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 pb-24 space-y-12">
+            {/* Hero Section - Welcome Message */}
+            {tripSummary && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center space-y-3 py-8"
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Sparkles className="w-6 h-6 text-purple-500" />
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    Get Ready for {tripSummary.destination}
+                  </h1>
                 </div>
-                <HorizontalProductRow
-                  title=""
-                  products={tripSpecificProducts}
-                />
-              </div>
+                <p className="text-gray-600 max-w-2xl mx-auto leading-relaxed">
+                  We've curated {filteredTopRecommendations.length + filteredDontForget.length + filteredComfortUpgrades.length} personalized
+                  recommendations to help you prepare for your {tripSummary.duration}-day trip.
+                  Each item is selected based on your destination, season, and travel style.
+                </p>
+              </motion.div>
             )}
 
-            {/* Best Sellers - show when no trip destination */}
-            {!tripSummary?.destination && Object.keys(categoryProducts).length > 0 && (
-              <HorizontalProductRow
-                title="Best Sellers for Travelers"
-                products={Object.values(categoryProducts)
-                  .flat()
-                  .sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0))
-                  .slice(0, 12)}
+            {/* Section 1: Recommended for Your Trip */}
+            {filteredTopRecommendations.length > 0 && (
+              <RecommendedSection
+                products={filteredTopRecommendations}
+                tripSummary={tripSummary}
+                savedProductIds={savedProductIds}
               />
             )}
 
-            {/* Category Rows */}
-            {CATEGORIES.map((category) => {
-              const products = filteredCategoryProducts[category.id];
-              if (!products || products.length === 0) return null;
+            {/* Section 2: Don't Forget These */}
+            {filteredDontForget.length > 0 && (
+              <DontForgetSection
+                products={filteredDontForget}
+                savedProductIds={savedProductIds}
+              />
+            )}
 
-              return (
-                <HorizontalProductRow
-                  key={category.id}
-                  title={category.name}
-                  products={products}
-                />
-              );
-            })}
+            {/* Section 3: Smart Assistant Card */}
+            <SmartAssistantCard />
+
+            {/* Section 4: Comfort Upgrades (Optional) */}
+            {filteredComfortUpgrades.length > 0 && (
+              <ComfortUpgradesSection
+                products={filteredComfortUpgrades}
+                savedProductIds={savedProductIds}
+              />
+            )}
+
+            {/* Bottom Spacer */}
+            <div className="h-8" />
           </div>
         )}
       </div>
 
-      {/* Compact Footer */}
-      <div className="px-4 py-2 border-t border-border/50 bg-muted/30">
-        <p className="text-[10px] text-center text-muted-foreground">
-          Powered by Amazon Associates. Prices may vary.
-        </p>
-      </div>
+      {/* Trip Context Edit Modal */}
+      <TripContextModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+      />
+
+      {/* Floating Product Cart */}
+      <FloatingProductCart />
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /* Allow dev access from other devices on network (phone testing) */
+  allowedDevOrigins: ['192.168.1.60', 'localhost'],
+
   /* Production optimizations */
   compress: true,
   poweredByHeader: false, // Hide X-Powered-By header for security
@@ -26,7 +29,16 @@ const nextConfig: NextConfig = {
         hostname: 'maps.googleapis.com',
         pathname: '/maps/api/place/photo**',
       },
-      // Add other allowed image domains here
+      {
+        protocol: 'https',
+        hostname: 'i.ytimg.com',
+        pathname: '/vi/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'img.youtube.com',
+        pathname: '/vi/**',
+      },
     ],
   },
 

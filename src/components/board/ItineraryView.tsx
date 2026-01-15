@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Trip, TravelInfo } from '@/types';
 import { WeatherWidget } from '@/components/trip/WeatherWidget';
 import { cn } from '@/lib/utils';
+import { DaySummary } from '@/components/board/DaySummary';
+import { TimeSlotPicker } from '@/components/board/TimeSlotPicker';
 import {
   Calendar,
   Clock,
@@ -20,12 +22,15 @@ import {
 } from 'lucide-react';
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   DragEndEvent,
+  DragStartEvent,
+  useDroppable,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -50,6 +55,122 @@ interface DayGroup {
   cards: Card[];
   totalTravelTime: number;
   isOverloaded: boolean;
+}
+
+// Droppable Day Wrapper Component
+function DroppableDay({
+  dayNumber,
+  children
+}: {
+  dayNumber: number;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `day-${dayNumber}`,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'transition-colors',
+        isOver && 'bg-primary/5 rounded-lg'
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Droppable Unscheduled Wrapper Component
+function UnscheduledDroppable({ children }: { children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'unscheduled',
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'transition-colors',
+        isOver && 'bg-amber-500/5 rounded-lg'
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Sortable Unscheduled Card Component
+function SortableUnscheduledCard({
+  card,
+  onCardClick,
+  onScheduleCard,
+}: {
+  card: Card;
+  onCardClick?: (card: Card) => void;
+  onScheduleCard?: (card: Card) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: card.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const payload = card.payload_json as any;
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div
+        className={cn(
+          'rounded-lg border border-border bg-background p-3 transition-all',
+          isDragging && 'shadow-2xl ring-2 ring-primary'
+        )}
+      >
+        <div className="flex items-center gap-3">
+          {/* Drag Handle */}
+          <button
+            {...attributes}
+            {...listeners}
+            className="flex-shrink-0 cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded transition-colors"
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </button>
+
+          <div onClick={() => onCardClick?.(card)} className="flex-1 min-w-0 cursor-pointer">
+            <h5 className="font-medium text-foreground line-clamp-1">{payload.name}</h5>
+            {payload.address && (
+              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                {payload.address}
+              </p>
+            )}
+          </div>
+          <span className="flex-shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground capitalize">
+            {card.type}
+          </span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onScheduleCard?.(card);
+            }}
+            className="flex-shrink-0 rounded-lg gradient-primary px-3 py-1.5 text-xs font-semibold text-white shadow transition-all hover:shadow-md hover:scale-105"
+          >
+            <Calendar className="h-3 w-3 inline mr-1" />
+            Schedule
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Sortable Card Component
@@ -149,6 +270,9 @@ function SortableCard({ card, isLast, onCardClick, getTravelIcon, formatTravelTi
 
 export function ItineraryView({ cards, trip, onCardClick, onUpdateCard, onScheduleCard }: ItineraryViewProps) {
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set([1]));
+  const [selectedCardForTime, setSelectedCardForTime] = useState<Card | null>(null);
+  const [showTimeSlotPicker, setShowTimeSlotPicker] = useState(false);
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
   // Setup drag-and-drop sensors
   const sensors = useSensors(
@@ -197,32 +321,86 @@ export function ItineraryView({ cards, trip, onCardClick, onUpdateCard, onSchedu
   // Unscheduled cards (no day assigned)
   const unscheduledCards = cards.filter((c) => !c.day);
 
-  // Handle drag end
-  const handleDragEnd = (event: DragEndEvent, dayNumber: number) => {
+  // Handle drag start
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveCardId(event.active.id as string);
+  };
+
+  // Handle drag end - unified handler for all drag operations
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    setActiveCardId(null);
 
     if (!over || active.id === over.id) {
       return;
     }
 
-    // Find the day's cards
-    const dayCards = dayGroups.find((g) => g.day === dayNumber)?.cards || [];
-    const oldIndex = dayCards.findIndex((c) => c.id === active.id);
-    const newIndex = dayCards.findIndex((c) => c.id === over.id);
+    const activeId = active.id as string;
+    const overId = over.id as string;
 
-    if (oldIndex === -1 || newIndex === -1) {
+    // Find the dragged card
+    const draggedCard = cards.find((c) => c.id === activeId);
+    if (!draggedCard) return;
+
+    // Determine source day (null if unscheduled)
+    const sourceDay = draggedCard.day || null;
+
+    // Check if dropping on a day droppable zone
+    if (overId.startsWith('day-')) {
+      const targetDay = parseInt(overId.replace('day-', ''));
+
+      // If moving to a different day or from unscheduled
+      if (sourceDay !== targetDay) {
+        const cardsInTargetDay = cards.filter((c) => c.day === targetDay);
+
+        if (onUpdateCard) {
+          onUpdateCard(draggedCard.id, {
+            day: targetDay,
+            order: cardsInTargetDay.length, // Add at end
+          });
+        }
+      }
       return;
     }
 
-    // Reorder cards within the day
-    const reorderedCards = arrayMove(dayCards, oldIndex, newIndex);
-
-    // Update order for all cards in this day
-    reorderedCards.forEach((card, index) => {
-      if (onUpdateCard) {
-        onUpdateCard(card.id, { order: index + 1 });
+    // Check if dropping on unscheduled droppable
+    if (overId === 'unscheduled') {
+      if (sourceDay !== null && onUpdateCard) {
+        onUpdateCard(draggedCard.id, {
+          day: undefined,
+          time_slot: undefined,
+          order: undefined,
+        });
       }
-    });
+      return;
+    }
+
+    // Dropping on another card - reorder within same day
+    const overCard = cards.find((c) => c.id === overId);
+    if (!overCard) return;
+
+    const targetDay = overCard.day;
+
+    // Only reorder if both cards are in the same day
+    if (sourceDay === targetDay && targetDay !== null && targetDay !== undefined) {
+      const dayCards = cards
+        .filter((c) => c.day === targetDay)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+      const oldIndex = dayCards.findIndex((c) => c.id === activeId);
+      const newIndex = dayCards.findIndex((c) => c.id === overId);
+
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const reorderedCards = arrayMove(dayCards, oldIndex, newIndex);
+
+        // Update order for all cards in this day
+        reorderedCards.forEach((card, index) => {
+          if (onUpdateCard) {
+            onUpdateCard(card.id, { order: index });
+          }
+        });
+      }
+    }
   };
 
   const toggleDay = (day: number) => {
@@ -255,10 +433,37 @@ export function ItineraryView({ cards, trip, onCardClick, onUpdateCard, onSchedu
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   };
 
+  const handleTimeSlotSelect = (timeSlot: string) => {
+    if (selectedCardForTime && onUpdateCard) {
+      onUpdateCard(selectedCardForTime.id, { time_slot: timeSlot });
+    }
+    setShowTimeSlotPicker(false);
+    setSelectedCardForTime(null);
+  };
+
+  const handleCardClickWithTime = (card: Card) => {
+    // If card has a time slot, open the time picker
+    if (card.day) {
+      setSelectedCardForTime(card);
+      setShowTimeSlotPicker(true);
+    }
+    // Also call the parent's onCardClick if provided
+    onCardClick?.(card);
+  };
+
+  // Get active card for drag overlay
+  const activeCard = activeCardId ? cards.find((c) => c.id === activeCardId) : null;
+
   return (
-    <div className="space-y-4">
-      {/* Trip Overview */}
-      <div className="rounded-xl border-2 border-border bg-card p-4">
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="space-y-4">
+        {/* Trip Overview */}
+        <div className="rounded-xl border-2 border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Calendar className="h-5 w-5 text-primary" />
@@ -343,19 +548,15 @@ export function ItineraryView({ cards, trip, onCardClick, onUpdateCard, onSchedu
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                <div className="border-t border-border p-4 space-y-3">
-                  {group.cards.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No stops scheduled for this day</p>
-                      <p className="text-xs mt-1">Drag cards here or assign them to Day {group.day}</p>
-                    </div>
-                  ) : (
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={(event) => handleDragEnd(event, group.day)}
-                    >
+                <DroppableDay dayNumber={group.day}>
+                  <div className="border-t border-border p-4 space-y-3">
+                    {group.cards.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No stops scheduled for this day</p>
+                        <p className="text-xs mt-1">Drag cards here from unscheduled or other days</p>
+                      </div>
+                    ) : (
                       <SortableContext
                         items={group.cards.map((c) => c.id)}
                         strategy={verticalListSortingStrategy}
@@ -367,81 +568,119 @@ export function ItineraryView({ cards, trip, onCardClick, onUpdateCard, onSchedu
                               key={card.id || `sortable-${index}`}
                               card={card}
                               isLast={isLast}
-                              onCardClick={onCardClick}
+                              onCardClick={handleCardClickWithTime}
                               getTravelIcon={getTravelIcon}
                               formatTravelTime={formatTravelTime}
                             />
                           );
                         })}
                       </SortableContext>
-                    </DndContext>
-                  )}
+                    )}
 
-                  {/* Overload Warning */}
-                  {group.isOverloaded && (
-                    <div className="flex items-start gap-2 rounded-lg bg-orange-500/10 border border-orange-500/20 p-3 mt-4">
-                      <AlertCircle className="h-4 w-4 text-orange-500 dark:text-orange-400 flex-shrink-0 mt-0.5" />
-                      <div className="text-sm">
-                        <p className="font-medium text-orange-600 dark:text-orange-400">
-                          Heavy travel day
-                        </p>
-                        <p className="text-orange-600/80 dark:text-orange-400/80 mt-0.5">
-                          This day has over 4 hours of travel time. Consider spreading stops across multiple days.
-                        </p>
+                    {/* Day Summary */}
+                    {group.cards.length > 0 && (
+                      <DaySummary
+                        dayNumber={group.day}
+                        allCards={cards}
+                        className="mt-4"
+                      />
+                    )}
+
+                    {/* Overload Warning */}
+                    {group.isOverloaded && (
+                      <div className="flex items-start gap-2 rounded-lg bg-orange-500/10 border border-orange-500/20 p-3 mt-4">
+                        <AlertCircle className="h-4 w-4 text-orange-500 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-orange-600 dark:text-orange-400">
+                            Heavy travel day
+                          </p>
+                          <p className="text-orange-600/80 dark:text-orange-400/80 mt-0.5">
+                            This day has over 4 hours of travel time. Consider spreading stops across multiple days.
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                </DroppableDay>
               </motion.div>
             )}
           </AnimatePresence>
         </motion.div>
       ))}
 
-      {/* Unscheduled Cards */}
-      {unscheduledCards.length > 0 && (
-        <div className="rounded-xl border-2 border-dashed border-border bg-card/50 p-4">
-          <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            Unscheduled ({unscheduledCards.length})
-          </h4>
-          <div className="space-y-2">
-            {unscheduledCards.map((card, index) => {
-              const payload = card.payload_json as any;
-              return (
-                <div
-                  key={card.id || `unsched-${index}`}
-                  className="rounded-lg border border-border bg-background p-3 transition-all"
-                >
-                  <div className="flex items-center gap-3">
-                    <div onClick={() => onCardClick?.(card)} className="flex-1 min-w-0 cursor-pointer">
-                      <h5 className="font-medium text-foreground line-clamp-1">{payload.name}</h5>
-                      {payload.address && (
-                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                          {payload.address}
-                        </p>
-                      )}
-                    </div>
-                    <span className="flex-shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground capitalize">
-                      {card.type}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onScheduleCard?.(card);
-                      }}
-                      className="flex-shrink-0 rounded-lg gradient-primary px-3 py-1.5 text-xs font-semibold text-white shadow transition-all hover:shadow-md hover:scale-105"
-                    >
-                      <Calendar className="h-3 w-3 inline mr-1" />
-                      Schedule
-                    </button>
-                  </div>
+        {/* Unscheduled Cards */}
+        {unscheduledCards.length > 0 && (
+          <UnscheduledDroppable>
+            <div className="rounded-xl border-2 border-dashed border-border bg-card/50 p-4">
+              <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Unscheduled ({unscheduledCards.length})
+              </h4>
+              <SortableContext
+                items={unscheduledCards.map((c) => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-2">
+                  {unscheduledCards.map((card) => (
+                    <SortableUnscheduledCard
+                      key={card.id}
+                      card={card}
+                      onCardClick={onCardClick}
+                      onScheduleCard={onScheduleCard}
+                    />
+                  ))}
                 </div>
-              );
-            })}
+              </SortableContext>
+            </div>
+          </UnscheduledDroppable>
+        )}
+
+        {/* Time Slot Picker Modal */}
+        {showTimeSlotPicker && selectedCardForTime && (
+          <TimeSlotPicker
+            isOpen={showTimeSlotPicker}
+            onClose={() => {
+              setShowTimeSlotPicker(false);
+              setSelectedCardForTime(null);
+            }}
+            onSelect={handleTimeSlotSelect}
+            currentTimeSlot={selectedCardForTime.time_slot}
+            activityName={(selectedCardForTime.payload_json as any).name || 'Activity'}
+          />
+        )}
+      </div>
+
+      {/* Drag Overlay */}
+      <DragOverlay>
+        {activeCard ? (
+          <div className="rounded-xl border-2 border-primary bg-background p-4 shadow-2xl opacity-90">
+            <div className="flex items-start gap-3">
+              <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
+              {activeCard.time_slot && (
+                <div className="flex-shrink-0 rounded-lg bg-muted px-3 py-1.5">
+                  <Clock className="h-3.5 w-3.5 inline mb-0.5 mr-1 text-muted-foreground" />
+                  <span className="text-sm font-semibold text-foreground">
+                    {activeCard.time_slot}
+                  </span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <h5 className="font-semibold text-foreground line-clamp-1">
+                  {(activeCard.payload_json as any).name}
+                </h5>
+                {(activeCard.payload_json as any).address && (
+                  <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
+                    {(activeCard.payload_json as any).address}
+                  </p>
+                )}
+              </div>
+              <span className="flex-shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground capitalize">
+                {activeCard.type}
+              </span>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }

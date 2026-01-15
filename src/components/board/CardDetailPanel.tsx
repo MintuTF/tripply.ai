@@ -386,11 +386,11 @@ export function CardDetailPanel({
                 </div>
               )}
 
-              {/* Photo */}
-              {payload.photos?.[0] && (
+              {/* Photo - supports both photos array and imageUrl string */}
+              {(payload.photos?.[0] || payload.imageUrl) && (
                 <div className="relative h-40 w-full rounded-xl overflow-hidden">
                   <img
-                    src={payload.photos[0]}
+                    src={payload.photos?.[0] || payload.imageUrl}
                     alt={payload.name}
                     className="w-full h-full object-cover"
                   />

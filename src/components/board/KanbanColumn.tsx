@@ -205,27 +205,27 @@ export function KanbanColumn({
           onClick={() => toggleSection(`${keyPrefix}${category.id}`)}
           className={cn(
             'w-full px-2 py-1.5 flex items-center justify-between transition-all duration-200 rounded-lg',
-            'hover:bg-card/50'
+            'hover:bg-purple-50/50'
           )}
         >
           <div className="flex items-center gap-2">
             <div
               className={cn(
                 'p-1 rounded-md',
-                category.color === 'blue' && 'bg-blue-500/15 text-blue-600',
-                category.color === 'orange' && 'bg-orange-500/15 text-orange-600',
-                category.color === 'purple' && 'bg-purple-500/15 text-purple-600'
+                category.color === 'purple' && 'bg-purple-500/15 text-purple-600',
+                category.color === 'pink' && 'bg-pink-500/15 text-pink-600',
+                category.color === 'violet' && 'bg-violet-500/15 text-violet-600'
               )}
             >
               <Icon className="h-3 w-3" />
             </div>
-            <span className="text-xs font-medium">{category.label}</span>
+            <span className="text-xs font-medium text-gray-700">{category.label}</span>
             <span
               className={cn(
                 'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-                category.color === 'blue' && 'bg-blue-500/15 text-blue-700',
-                category.color === 'orange' && 'bg-orange-500/15 text-orange-700',
-                category.color === 'purple' && 'bg-purple-500/15 text-purple-700'
+                category.color === 'purple' && 'bg-purple-100 text-purple-700',
+                category.color === 'pink' && 'bg-pink-100 text-pink-700',
+                category.color === 'violet' && 'bg-violet-100 text-violet-700'
               )}
             >
               {categoryCards.length}
@@ -286,8 +286,8 @@ export function KanbanColumn({
         key={`day-${dayNum}`}
         dayNum={dayNum}
         className={cn(
-          'rounded-xl border overflow-hidden bg-card/30 backdrop-blur-sm',
-          isEmpty ? 'border-dashed border-border/50' : 'border-border/30'
+          'rounded-xl border overflow-hidden bg-white/50 backdrop-blur-sm',
+          isEmpty ? 'border-dashed border-purple-200/50' : 'border-purple-100/50'
         )}
       >
         {/* Day Header */}
@@ -295,31 +295,31 @@ export function KanbanColumn({
           onClick={() => toggleSection(`day-${dayNum}`)}
           className={cn(
             'w-full px-3 py-2 flex items-center justify-between transition-all duration-200',
-            'hover:bg-card/50',
-            isUnscheduled && 'bg-muted/30'
+            'hover:bg-purple-50/50',
+            isUnscheduled && 'bg-purple-50/30'
           )}
         >
           <div className="flex items-center gap-2">
             <div className={cn(
               'p-1.5 rounded-lg',
               isUnscheduled
-                ? 'bg-gray-500/15 text-gray-600'
-                : 'bg-green-500/15 text-green-600'
+                ? 'bg-gray-100 text-gray-500'
+                : 'bg-gradient-to-br from-purple-100 to-pink-100 text-purple-600'
             )}>
               <Calendar className="h-3.5 w-3.5" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">
+              <span className="text-sm font-semibold text-gray-800">
                 {isUnscheduled ? 'Unscheduled' : `Day ${dayNum}`}
               </span>
               {!isUnscheduled && tripDates && (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-gray-500">
                   {formatDayDate(tripDates.start, dayNum)}
                 </span>
               )}
             </div>
             {dayCardCount > 0 && (
-              <span className="rounded-full bg-green-500/15 text-green-700 px-2 py-0.5 text-xs font-semibold">
+              <span className="rounded-full bg-purple-100 text-purple-700 px-2 py-0.5 text-xs font-semibold">
                 {dayCardCount}
               </span>
             )}
@@ -360,16 +360,16 @@ export function KanbanColumn({
     <div className="flex min-w-[320px] flex-1 flex-col">
       {/* Column Header */}
       <div
-        className="mb-4 rounded-2xl border-2 border-border/30 p-4 backdrop-blur-sm shadow-sm"
+        className="mb-4 rounded-2xl border border-purple-100/50 p-4 backdrop-blur-sm shadow-sm bg-white/60"
         style={{
           background:
-            column.color === 'blue'
-              ? 'linear-gradient(135deg, rgba(88, 166, 193, 0.1), rgba(88, 166, 193, 0.05))'
-              : column.color === 'purple'
-              ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.05))'
-              : column.color === 'green'
-              ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05))'
-              : 'linear-gradient(135deg, rgba(107, 114, 128, 0.1), rgba(107, 114, 128, 0.05))',
+            column.color === 'purple'
+              ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.05))'
+              : column.color === 'pink'
+              ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(244, 114, 182, 0.05))'
+              : column.color === 'gradient'
+              ? 'linear-gradient(135deg, rgba(126, 34, 206, 0.1), rgba(219, 39, 119, 0.05))'
+              : 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(236, 72, 153, 0.04))',
         }}
       >
         <div className="flex items-center justify-between">
@@ -377,21 +377,20 @@ export function KanbanColumn({
             <div
               className={cn(
                 'h-3 w-3 rounded-full shadow-lg',
-                column.color === 'blue' && 'bg-primary shadow-primary/50',
-                column.color === 'purple' && 'bg-accent-foreground shadow-accent-foreground/50',
-                column.color === 'green' && 'bg-success shadow-success/50',
-                column.color === 'gray' && 'bg-muted-foreground shadow-muted-foreground/50'
+                column.color === 'purple' && 'bg-purple-500 shadow-purple-500/50',
+                column.color === 'pink' && 'bg-pink-500 shadow-pink-500/50',
+                column.color === 'gradient' && 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-purple-500/50'
               )}
             />
-            <h3 className="text-lg font-bold">{column.label}</h3>
-            <span className="rounded-full bg-card/80 px-3 py-0.5 text-sm font-semibold shadow-sm">
+            <h3 className="text-lg font-bold text-gray-800">{column.label}</h3>
+            <span className="rounded-full bg-purple-100 text-purple-700 px-3 py-0.5 text-sm font-semibold">
               {totalCount}
             </span>
           </div>
           {onAskAI && (
             <button
               onClick={onAskAI}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all duration-300 gradient-primary text-white shadow-md hover:shadow-lg hover:scale-105"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all duration-300 bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md shadow-purple-200 hover:shadow-lg hover:shadow-purple-300 hover:scale-105"
             >
               <Sparkles className="h-4 w-4" />
               Ask AI
@@ -405,7 +404,7 @@ export function KanbanColumn({
         ref={setDroppableRef}
         className={cn(
           'flex-1 overflow-y-auto space-y-3 pr-1 min-h-[200px] rounded-xl transition-colors',
-          isOver && 'bg-primary/5 border-2 border-dashed border-primary/30'
+          isOver && 'bg-purple-50/50 border-2 border-dashed border-purple-300/50'
         )}
       >
         <SortableContext items={allCardIds} strategy={verticalListSortingStrategy}>
@@ -434,34 +433,34 @@ export function KanbanColumn({
                     key={category.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="rounded-xl border border-border/30 overflow-hidden bg-card/30 backdrop-blur-sm"
+                    className="rounded-xl border border-purple-100/50 overflow-hidden bg-white/50 backdrop-blur-sm"
                   >
                     {/* Category Sub-section Header */}
                     <button
                       onClick={() => toggleSection(category.id)}
                       className={cn(
                         'w-full px-3 py-2 flex items-center justify-between transition-all duration-200',
-                        'hover:bg-card/50'
+                        'hover:bg-purple-50/50'
                       )}
                     >
                       <div className="flex items-center gap-2">
                         <div
                           className={cn(
                             'p-1.5 rounded-lg',
-                            category.color === 'blue' && 'bg-blue-500/15 text-blue-600',
-                            category.color === 'orange' && 'bg-orange-500/15 text-orange-600',
-                            category.color === 'purple' && 'bg-purple-500/15 text-purple-600'
+                            category.color === 'purple' && 'bg-purple-500/15 text-purple-600',
+                            category.color === 'pink' && 'bg-pink-500/15 text-pink-600',
+                            category.color === 'violet' && 'bg-violet-500/15 text-violet-600'
                           )}
                         >
                           <Icon className="h-3.5 w-3.5" />
                         </div>
-                        <span className="text-sm font-medium">{category.label}</span>
+                        <span className="text-sm font-medium text-gray-700">{category.label}</span>
                         <span
                           className={cn(
                             'rounded-full px-2 py-0.5 text-xs font-semibold',
-                            category.color === 'blue' && 'bg-blue-500/15 text-blue-700',
-                            category.color === 'orange' && 'bg-orange-500/15 text-orange-700',
-                            category.color === 'purple' && 'bg-purple-500/15 text-purple-700'
+                            category.color === 'purple' && 'bg-purple-100 text-purple-700',
+                            category.color === 'pink' && 'bg-pink-100 text-pink-700',
+                            category.color === 'violet' && 'bg-violet-100 text-violet-700'
                           )}
                         >
                           {categoryCards.length}
@@ -515,10 +514,10 @@ export function KanbanColumn({
 
           {/* Empty state for column */}
           {totalCount === 0 && (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <div className="flex items-center justify-center py-8">
               <div className="text-center">
-                <p className="text-sm">No items yet</p>
-                <p className="text-xs mt-1">Drag cards here or add new ones</p>
+                <p className="text-sm text-purple-400">No items yet</p>
+                <p className="text-xs mt-1 text-gray-400">Drag cards here or add new ones</p>
               </div>
             </div>
           )}

@@ -5,7 +5,7 @@ import { Message, PlaceCard } from '@/types';
 import { ChatInput } from '../chat/ChatInput';
 import { MarkdownRenderer } from '../chat/MarkdownRenderer';
 import { DraggablePlaceCard } from './DraggablePlaceCard';
-import { cn } from '@/lib/utils';
+import { cn, generateUUID } from '@/lib/utils';
 import { Sparkles, Wrench, ExternalLink } from 'lucide-react';
 
 interface ChatColumnProps {
@@ -13,6 +13,7 @@ interface ChatColumnProps {
   onAddToShortlist: (card: PlaceCard) => void;
   shortlistedCardIds: Set<string>;
   className?: string;
+  destinationCity?: string;
 }
 
 export function ChatColumn({
@@ -20,6 +21,7 @@ export function ChatColumn({
   onAddToShortlist,
   shortlistedCardIds,
   className,
+  destinationCity,
 }: ChatColumnProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,14 +38,14 @@ export function ChatColumn({
     if (!text.trim()) return;
 
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       trip_id: tripId || 'temp',
       role: 'user',
       text,
       created_at: new Date().toISOString(),
     };
 
-    const assistantMessageId = crypto.randomUUID();
+    const assistantMessageId = generateUUID();
     const assistantMessage: Message = {
       id: assistantMessageId,
       trip_id: tripId || 'temp',
@@ -229,7 +231,7 @@ export function ChatColumn({
                   {/* Text content */}
                   {message.text && (
                     <div className="prose prose-sm prose-gray dark:prose-invert max-w-none">
-                      <MarkdownRenderer content={message.text} />
+                      <MarkdownRenderer content={message.text} onAddToShortlist={onAddToShortlist} destinationCity={destinationCity} />
                     </div>
                   )}
 

@@ -49,7 +49,10 @@ export interface Product {
 
 export interface ProductRecommendation extends Product {
   relevanceScore: number; // 0-100
-  reason: string; // AI-generated "why you need this for THIS trip"
+  reason: string; // AI-generated "why you need this for THIS trip" (backward compatibility)
+  whyBullets?: string[]; // NEW: 2-3 contextual reason bullets for display
+  smartBadges?: string[]; // NEW: Travel-aware badges with emoji (e.g., "❄️ Cold weather")
+  contextualTags?: string[]; // NEW: Trip-specific tags for enhanced filtering
 }
 
 export interface MarketplaceFilters {
@@ -85,6 +88,14 @@ export interface CategoryKit {
   isAIGenerated?: boolean;
 }
 
+export interface TripContextSummary {
+  destination: string;
+  duration: number; // days
+  travelers: string; // Formatted text like "Couple", "Family with 2 kids"
+  season: string; // "Winter", "Summer", "Spring", "Fall"
+  tripType?: TripType;
+}
+
 export interface CategoryDefinition {
   id: ProductCategory;
   name: string;
@@ -93,9 +104,20 @@ export interface CategoryDefinition {
 }
 
 export interface MarketplaceRecommendationResponse {
-  personalized: ProductRecommendation[];
+  // NEW: Sectioned recommendations (Phase 8)
+  topRecommendations: ProductRecommendation[]; // Score >= 75
+  dontForget: ProductRecommendation[]; // Commonly forgotten essentials
+  comfortUpgrades: ProductRecommendation[]; // Premium optional items
+  tripContextSummary: TripContextSummary | null; // Parsed trip context
+  totalProducts: number; // Total count across all sections
+
+  // Legacy fields (backward compatibility)
+  personalized: ProductRecommendation[]; // Renamed from 'personalized' in old response
   kits: CategoryKit[];
   general: Product[];
+  recommendations: ProductRecommendation[]; // All personalized (score >= 60)
+  smartKits: CategoryKit[]; // Same as kits
+  categoryProducts: Record<string, Product[]>; // Products grouped by category
   tripSummary?: {
     destination: string;
     weather: string;

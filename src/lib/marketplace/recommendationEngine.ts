@@ -18,9 +18,11 @@ import {
   getProductsForActivity,
   getProductsForDestination,
   searchProducts,
+  fetchProductsFromDB,
 } from './products';
 import { CATEGORIES } from './categories';
 import { generateAffiliateUrl } from './affiliateUtils';
+import { generateWhyBullets, generateSmartBadges } from './whyGenerator';
 
 /**
  * Determine weather condition from temperature and description
@@ -56,7 +58,7 @@ function determineWeatherCondition(
  * Calculate relevance score for a product based on trip context
  */
 function calculateRelevanceScore(product: Product, context: MarketplaceTripContext): number {
-  let score = 50; // Base score
+  let score = 60; // Base score (increased from 50 to ensure products appear with minimal metadata)
 
   // Weather matching (+20 points)
   const weatherCondition = determineWeatherCondition(
@@ -99,6 +101,44 @@ function calculateRelevanceScore(product: Product, context: MarketplaceTripConte
   if (context.duration && context.duration > 7) {
     if (['organization', 'toiletries', 'clothing'].includes(product.category)) {
       score += 5;
+    }
+  }
+
+  // FALLBACK SCORING RULES (added to ensure products appear even with sparse metadata)
+
+  // Universal essentials bonus - highly rated products everyone needs
+  if (product.rating && product.rating >= 4.7 && product.reviewCount && product.reviewCount > 500) {
+    score += 15; // Popular, highly-rated items are safer recommendations
+  }
+
+  // Category-based essentials - always useful travel categories
+  if (['essentials', 'electronics', 'safety'].includes(product.category)) {
+    score += 10; // Core travel categories get a boost
+  }
+
+  // TSA/Travel-specific tags
+  if (product.tags.includes('TSA-approved') || product.tags.includes('travel-size')) {
+    score += 10;
+  }
+
+  // Destination region matching (more lenient than exact match)
+  if (context.destination && product.destinations) {
+    const destLower = context.destination.toLowerCase();
+
+    // Check for continent/region matches
+    const asiaKeywords = ['tokyo', 'japan', 'asia', 'china', 'korea', 'thailand', 'vietnam', 'singapore'];
+    const europeKeywords = ['paris', 'london', 'europe', 'italy', 'spain', 'germany', 'france', 'uk'];
+    const americasKeywords = ['usa', 'america', 'new york', 'los angeles', 'canada', 'mexico'];
+
+    if (asiaKeywords.some(k => destLower.includes(k)) &&
+        product.destinations.some(d => asiaKeywords.includes(d.toLowerCase()))) {
+      score += 10; // Region match
+    } else if (europeKeywords.some(k => destLower.includes(k)) &&
+               product.destinations.some(d => europeKeywords.includes(d.toLowerCase()))) {
+      score += 10; // Region match
+    } else if (americasKeywords.some(k => destLower.includes(k)) &&
+               product.destinations.some(d => americasKeywords.includes(d.toLowerCase()))) {
+      score += 10; // Region match
     }
   }
 
@@ -272,7 +312,8 @@ export async function getRecommendations(
   kits: CategoryKit[];
   general: Product[];
 }> {
-  let allProducts = getAllProducts();
+  // Fetch products from database (with fallback to static products)
+  let allProducts = await fetchProductsFromDB();
 
   // Apply filters
   if (filters.budgetTier) {
@@ -296,17 +337,19 @@ export async function getRecommendations(
     };
   }
 
-  // Calculate relevance scores
+  // Calculate relevance scores and generate WHY content
   const scoredProducts: ProductRecommendation[] = allProducts.map((product) => ({
     ...product,
     affiliateUrl: generateAffiliateUrl(product.affiliateUrl),
     relevanceScore: calculateRelevanceScore(product, context),
     reason: generateReason(product, context),
+    whyBullets: generateWhyBullets(product, context), // NEW: Contextual bullets
+    smartBadges: generateSmartBadges(product, context), // NEW: Smart badges
   }));
 
   // Sort by relevance and filter high-scoring items
   const personalized = scoredProducts
-    .filter((p) => p.relevanceScore >= 60)
+    .filter((p) => p.relevanceScore >= 55) // Lowered from 60 to show more products
     .sort((a, b) => b.relevanceScore - a.relevanceScore)
     .slice(0, 12);
 
@@ -329,11 +372,12 @@ export async function getRecommendations(
 /**
  * Get products grouped by category
  */
-export function getProductsByCategories(): Record<string, Product[]> {
+export async function getProductsByCategories(): Promise<Record<string, Product[]>> {
+  const allProducts = await fetchProductsFromDB();
   const result: Record<string, Product[]> = {};
 
   for (const category of CATEGORIES) {
-    const products = getProductsByCategory(category.id);
+    const products = allProducts.filter(p => p.category === category.id);
     if (products.length > 0) {
       result[category.id] = products;
     }
@@ -345,8 +389,9 @@ export function getProductsByCategories(): Record<string, Product[]> {
 /**
  * Get essential products (universally recommended)
  */
-export function getEssentialProducts(): Product[] {
-  const essentials = getAllProducts().filter(
+export async function getEssentialProducts(): Promise<Product[]> {
+  const allProducts = await fetchProductsFromDB();
+  const essentials = allProducts.filter(
     (p) =>
       p.category === 'essentials' ||
       p.tags.includes('essential') ||
@@ -354,4 +399,132 @@ export function getEssentialProducts(): Product[] {
   );
 
   return essentials.slice(0, 10);
+}
+
+/**
+ * Get "Don't Forget These" items - commonly forgotten essentials
+ */
+export async function getDontForgetItems(
+  context: MarketplaceTripContext | null
+): Promise<ProductRecommendation[]> {
+  let allProducts = await fetchProductsFromDB();
+
+  // Commonly forgotten items categories
+  const forgottenCategories = ['electronics', 'essentials', 'toiletries'];
+
+  // Items commonly forgotten by category
+  const commonlyForgotten = allProducts.filter((product) => {
+    // Adapters and chargers
+    if (product.category === 'electronics' &&
+        (product.name.toLowerCase().includes('adapter') ||
+         product.name.toLowerCase().includes('charger') ||
+         product.name.toLowerCase().includes('cable'))) {
+      return true;
+    }
+
+    // TSA-approved toiletries
+    if (product.category === 'toiletries' &&
+        product.tags.includes('TSA-approved')) {
+      return true;
+    }
+
+    // Travel essentials like locks, bags
+    if (product.category === 'essentials' &&
+        (product.tags.includes('security') ||
+         product.name.toLowerCase().includes('lock') ||
+         product.name.toLowerCase().includes('bag'))) {
+      return true;
+    }
+
+    // First aid / medications
+    if (product.tags.includes('health') ||
+        product.name.toLowerCase().includes('first aid')) {
+      return true;
+    }
+
+    return false;
+  });
+
+  // If we have trip context, add WHY bullets and smart badges
+  if (context) {
+    return commonlyForgotten.slice(0, 6).map((product) => ({
+      ...product,
+      affiliateUrl: generateAffiliateUrl(product.affiliateUrl),
+      relevanceScore: calculateRelevanceScore(product, context),
+      reason: generateReason(product, context),
+      whyBullets: generateWhyBullets(product, context),
+      smartBadges: generateSmartBadges(product, context),
+    }));
+  }
+
+  // Without context, return basic recommendations
+  return commonlyForgotten.slice(0, 6).map((product) => ({
+    ...product,
+    affiliateUrl: generateAffiliateUrl(product.affiliateUrl),
+    relevanceScore: 50,
+    reason: product.shortDescription,
+    whyBullets: [product.shortDescription, 'Commonly forgotten by travelers'],
+    smartBadges: ['🎯 Essential'],
+  }));
+}
+
+/**
+ * Get "Comfort Upgrades" - premium optional items
+ */
+export async function getComfortUpgrades(
+  context: MarketplaceTripContext | null
+): Promise<ProductRecommendation[]> {
+  let allProducts = await fetchProductsFromDB();
+
+  // Filter for premium comfort items
+  const comfortUpgrades = allProducts.filter((product) => {
+    // Must be premium tier or mid-range with high rating
+    if (product.budgetTier === 'premium' ||
+        (product.budgetTier === 'mid-range' && (product.rating || 0) >= 4.7)) {
+
+      // Must be comfort category or have comfort-related tags
+      if (product.category === 'comfort' ||
+          product.tags.includes('luxury') ||
+          product.tags.includes('premium') ||
+          product.name.toLowerCase().includes('upgrade')) {
+        return true;
+      }
+
+      // Include organization items that are premium (packing cubes, etc.)
+      if (product.category === 'organization' && product.budgetTier === 'premium') {
+        return true;
+      }
+
+      // Include high-end electronics (noise-canceling headphones, etc.)
+      if (product.category === 'electronics' &&
+          (product.name.toLowerCase().includes('noise') ||
+           product.name.toLowerCase().includes('premium'))) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+
+  // If we have trip context, add WHY bullets and smart badges
+  if (context) {
+    return comfortUpgrades.slice(0, 6).map((product) => ({
+      ...product,
+      affiliateUrl: generateAffiliateUrl(product.affiliateUrl),
+      relevanceScore: calculateRelevanceScore(product, context),
+      reason: generateReason(product, context),
+      whyBullets: generateWhyBullets(product, context),
+      smartBadges: generateSmartBadges(product, context),
+    }));
+  }
+
+  // Without context, return basic recommendations
+  return comfortUpgrades.slice(0, 6).map((product) => ({
+    ...product,
+    affiliateUrl: generateAffiliateUrl(product.affiliateUrl),
+    relevanceScore: 50,
+    reason: product.shortDescription,
+    whyBullets: [product.shortDescription, 'Enhance your travel experience'],
+    smartBadges: ['✨ Premium'],
+  }));
 }

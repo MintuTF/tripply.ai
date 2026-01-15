@@ -1,8 +1,13 @@
+import type { ChatVideoResult, VideoAnalysis, SmartVideoResult } from './video';
+
 // Core Data Models
 export type UserRole = 'user' | 'admin';
 
 // View Types
-export type TripView = 'map' | 'board' | 'chat' | 'marketplace';
+export type TripView = 'map' | 'board' | 'chat' | 'marketplace' | 'research';
+
+// Chat Mode - User explicitly selects Ask or Itinerary
+export type ChatMode = 'ask' | 'itinerary';
 
 // Chat Board Types
 export type ChatBoardItemStatus = 'shortlist' | 'confirmed';
@@ -106,11 +111,17 @@ export type TripParty = {
 export type Message = {
   id: string;
   trip_id: string;
+  conversation_id?: string;
   role: 'user' | 'assistant' | 'system';
   text: string;
+  chat_mode?: ChatMode;
   tool_calls_json?: ToolCall[];
   citations_json?: Citation[];
   cards_json?: PlaceCard[];
+  videos_json?: ChatVideoResult[];
+  videoAnalysis_json?: VideoAnalysis;
+  smartVideoResult_json?: SmartVideoResult;
+  itinerary_json?: ItineraryResponse;
   created_at: string;
 };
 
@@ -120,6 +131,8 @@ export type PlaceCard = {
   type: 'location' | 'restaurant' | 'hotel' | 'activity';
   name: string;
   address?: string;
+  vicinity?: string; // Short address from Google Places API
+  location?: { lat: number; lng: number }; // Alternative coordinate format
   coordinates?: { lat: number; lng: number };
   photos: string[];
   rating?: number;
@@ -139,7 +152,91 @@ export type PlaceCard = {
   check_out_date?: string;
   price_per_night?: number;
   currency?: string;
+  // WHY reasoning fields (for AI recommendations)
+  whyTags?: string[];    // Short tags like "Romantic", "Walkable"
+  whyBullets?: string[]; // Contextual reasons this fits the user's trip
 };
+
+// Chat Conversation - Persistent conversation session
+export interface ChatConversation {
+  id: string;
+  user_id: string;
+  trip_id?: string;
+  destination: string;
+  title: string;
+  chat_mode: ChatMode;
+  created_at: string;
+  updated_at: string;
+  // Computed/joined fields
+  message_count?: number;
+  last_message_preview?: string;
+}
+
+// Itinerary Response Structure (parsed from AI JSON)
+export interface ItineraryDayItem {
+  type: 'activity' | 'restaurant' | 'hotel' | 'transport';
+  placeId?: string;
+  name: string;
+  timeSlot: 'morning' | 'afternoon' | 'evening' | 'night';
+  durationMinutes: number;
+  why: string[];
+  place?: PlaceCard;
+}
+
+export interface ItineraryDay {
+  day: number;
+  theme: string;
+  whyThisDayWorks: string[];
+  items: ItineraryDayItem[];
+}
+
+export interface ItineraryResponse {
+  tripSummary: {
+    destination: string;
+    days: number;
+    travelerType?: string;
+    pace?: string;
+    focus?: string[];
+  };
+  whyThisPlanWorks: string[];
+  days: ItineraryDay[];
+}
+
+// Extended Message type for mode-aware chat
+export interface ModeAwareMessage extends Message {
+  chatMode?: ChatMode;
+  itinerary_json?: ItineraryResponse;
+}
+
+// Ask Mode - Parsed response types for card-first UI
+export interface AskModeInsight {
+  text: string;
+}
+
+export interface AskModeHighlight {
+  emoji: string;
+  text: string;
+}
+
+export interface AskModePlace {
+  name: string;
+  highlights: AskModeHighlight[];
+  location?: string;
+  card?: PlaceCard; // Merged from API
+}
+
+export interface AskModeSection {
+  emoji: string;
+  title: string;
+  count?: number;
+  places: AskModePlace[];
+}
+
+export interface ParsedAskModeResponse {
+  insight: AskModeInsight | null;
+  sections: AskModeSection[];
+  followUps: { suggestions: string[] } | null;
+}
 
 export type ToolCall = {
   id: string;
@@ -160,7 +257,7 @@ export type Card = {
   id: string;
   trip_id: string;
   type: CardType;
-  payload_json: HotelCard | SpotCard | FoodCard | ActivityCard | NoteCard;
+  payload_json: HotelCard | SpotCard | FoodCard | ActivityCard | NoteCard | ProductCard;
   labels: string[];
   favorite: boolean;
   ranking?: number;
@@ -172,7 +269,7 @@ export type Card = {
   updated_at: string;
 };
 
-export type CardType = 'hotel' | 'spot' | 'food' | 'activity' | 'note';
+export type CardType = 'hotel' | 'spot' | 'food' | 'activity' | 'note' | 'product';
 
 export type TravelInfo = {
   distance: number; // in km
@@ -245,6 +342,23 @@ export type NoteCard = {
   title: string;
   content: string;
   created_by: string;
+};
+
+export type ProductCard = {
+  name: string;
+  description: string;
+  shortDescription: string;
+  image: string;
+  price: number;
+  affiliateUrl: string;
+  category: string; // From marketplace ProductCategory
+  rating?: number;
+  reviewCount?: number;
+  budgetTier?: 'budget' | 'mid-range' | 'premium';
+  whyBullets?: string[]; // Contextual reasons for this trip
+  smartBadges?: string[]; // Travel-aware badges with emoji
+  cost?: number; // If user wants to track different cost
+  currency?: string; // Currency code (e.g., USD, EUR)
 };
 
 export type Comment = {
@@ -424,3 +538,39 @@ export type ShareLink = {
   expires_at?: string;
   created_at: string;
 };
+
+// Reddit Types
+export type RedditPost = {
+  id: string;
+  title: string;
+  selftext: string;
+  score: number;
+  num_comments: number;
+  url: string;
+  permalink: string;
+  created_utc: number;
+  author: string;
+};
+
+// ============================================================================
+// Auto-Save Types
+// ============================================================================
+
+export type SavePriority = 'critical' | 'medium' | 'low';
+
+export type SaveStatus =
+  | { state: 'saved' }
+  | { state: 'pending'; count: number }
+  | { state: 'saving'; progress?: number }
+  | { state: 'error'; message: string }
+  | { state: 'conflict'; conflicts: ConflictInfo[] }
+  | { state: 'offline'; queuedCount: number };
+
+export interface ConflictInfo {
+  cardId: string;
+  field: string;
+  yourValue: any;
+  theirValue: any;
+  theirTimestamp: string;
+  theirUser?: string;
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Sparkles, Mail, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,12 @@ export function SignInModal({
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Mount effect for portal
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close on escape key
   useEffect(() => {
@@ -65,7 +72,7 @@ export function SignInModal({
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=/travel?resumeTrip=true`,
       },
     });
   };
@@ -84,7 +91,7 @@ export function SignInModal({
     const { error: authError } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/travel?resumeTrip=true`,
       },
     });
 
@@ -104,7 +111,7 @@ export function SignInModal({
     const { error: authError } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/travel?resumeTrip=true`,
       },
     });
 
@@ -121,11 +128,13 @@ export function SignInModal({
     setError(null);
   };
 
+  // Don't render on server
+  if (!mounted) return null;
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-[110] flex items-center justify-center"
       onClick={handleBackdropClick}
     >
       {/* Backdrop */}
@@ -134,6 +143,7 @@ export function SignInModal({
       {/* Modal */}
       <div
         ref={modalRef}
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           'relative w-full max-w-md mx-4 bg-card rounded-2xl shadow-2xl',
           'animate-in fade-in zoom-in-95 duration-200'
@@ -335,4 +345,6 @@ export function SignInModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

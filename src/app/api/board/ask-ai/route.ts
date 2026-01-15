@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServerComponentClient } from '@/lib/db/supabase';
+import { createServerComponentClient } from '@/lib/db/supabase-server';
 import { openai } from '@/lib/ai/openai';
 import { findPlaceByName } from '@/lib/tools/places';
 import { createCard } from '@/lib/db/queries';

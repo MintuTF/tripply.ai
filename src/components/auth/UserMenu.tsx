@@ -3,18 +3,28 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from './AuthProvider';
-import { LogOut, Map, ChevronDown } from 'lucide-react';
+import { LogOut, Map, ChevronDown, Bookmark, Plane } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { getAvatarUrl } from '@/lib/gravatar';
 
-export function UserMenu() {
+interface UserMenuProps {
+  onTabChange?: (tab: string) => void;
+  savedCount?: number;
+}
+
+export function UserMenu({ onTabChange, savedCount = 0 }: UserMenuProps) {
   const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const isOnTravelPage = pathname === '/travel';
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -70,14 +80,44 @@ export function UserMenu() {
       </div>
 
       <div className="p-1">
-        <Link
-          href="/trips"
-          onClick={() => setIsOpen(false)}
-          className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+        {/* Trips */}
+        <button
+          onClick={() => {
+            setIsOpen(false);
+            if (isOnTravelPage && onTabChange) {
+              onTabChange('trips');
+            } else {
+              router.push('/travel?tab=trips');
+            }
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
         >
-          <Map className="h-4 w-4" />
+          <Plane className="h-4 w-4" />
           My Trips
-        </Link>
+        </button>
+
+        {/* Saved */}
+        <button
+          onClick={() => {
+            setIsOpen(false);
+            if (isOnTravelPage && onTabChange) {
+              onTabChange('saved');
+            } else {
+              router.push('/travel?tab=saved');
+            }
+          }}
+          className="w-full flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <Bookmark className="h-4 w-4" />
+            Saved Places
+          </span>
+          {savedCount > 0 && (
+            <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-pink-500 text-white text-xs font-bold flex items-center justify-center">
+              {savedCount}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="border-t p-1">

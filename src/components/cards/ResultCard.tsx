@@ -2,6 +2,7 @@
 
 import { Card } from '@/types';
 import { cn } from '@/lib/utils';
+import { Star } from 'lucide-react';
 
 interface ResultCardProps {
   card: Card;
@@ -60,12 +61,19 @@ export function ResultCard({
 
   const name = data.name || data.title || 'Untitled';
   const location = getLocation(data);
-  const priceLevel = data.price_level as number | undefined;
+  const priceLevel = data.price_level || data.priceLevel as number | undefined;
   const priceRange = data.price_range as [number, number] | undefined;
   const typeInfo = getTypeInfo(data, card.type);
   const description = data.description || data.notes;
-  const photos = data.photos as string[] | undefined;
-  const hasPhoto = photos && photos.length > 0;
+
+  // Handle both photos array and imageUrl string formats
+  const photosArray = data.photos as string[] | undefined;
+  const imageUrl = data.imageUrl as string | undefined;
+  const photoUrl = photosArray?.[0] || imageUrl;
+  const hasPhoto = !!photoUrl;
+
+  // Rating (handle both rating formats)
+  const rating = data.rating as number | undefined;
 
   // Build the price/type line
   let priceTypeText = '';
@@ -99,7 +107,7 @@ export function ResultCard({
       {hasPhoto && (
         <div className="w-20 h-20 flex-shrink-0 overflow-hidden rounded-xl bg-muted">
           <img
-            src={photos[0]}
+            src={photoUrl}
             alt={name}
             className="w-full h-full object-cover"
           />
@@ -108,10 +116,18 @@ export function ResultCard({
 
       {/* Content */}
       <div className="flex-1 flex flex-col justify-center min-w-0 gap-0.5">
-        {/* Name */}
-        <h3 className="font-semibold text-foreground truncate text-sm">
-          {name}
-        </h3>
+        {/* Name & Rating */}
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-foreground truncate text-sm flex-1">
+            {name}
+          </h3>
+          {rating && rating > 0 && (
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+              <span className="text-xs font-medium text-foreground">{rating.toFixed(1)}</span>
+            </div>
+          )}
+        </div>
 
         {/* Location */}
         {location && (

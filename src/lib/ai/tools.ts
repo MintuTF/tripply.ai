@@ -227,6 +227,72 @@ export const TOOLS: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'search_reddit',
+      description:
+        'Search Reddit r/travel for travel tips, recommendations, and advice about a destination. Use this when users ask for local tips, hidden gems, travel advice, or want to know what other travelers recommend.',
+      parameters: {
+        type: 'object',
+        properties: {
+          destination: {
+            type: 'string',
+            description: 'The destination city or country to search for (e.g., "Tokyo", "Italy", "Barcelona")',
+          },
+          sort: {
+            type: 'string',
+            enum: ['relevance', 'hot', 'top', 'new'],
+            description: 'How to sort results. Use "top" for most upvoted, "relevance" for best matches',
+            default: 'relevance',
+          },
+          time: {
+            type: 'string',
+            enum: ['week', 'month', 'year', 'all'],
+            description: 'Time filter for posts. Use "year" for recent tips, "all" for comprehensive coverage',
+            default: 'year',
+          },
+        },
+        required: ['destination'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_videos',
+      description:
+        'Search for short travel videos about a destination. ALWAYS use this tool when users ask about: attractions, activities, food, parks, museums, restaurants, beaches, nightlife, places to visit, things to do, "interested in", "more about", or any experiential/visual content. Returns YouTube travel shorts with visual content.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query for videos (e.g., "street food", "parks and museums", "family activities")',
+          },
+          location: {
+            type: 'string',
+            description: 'City or destination name (e.g., "Tokyo", "Paris")',
+          },
+          country: {
+            type: 'string',
+            description: 'Country name for more accurate results (e.g., "Japan", "France")',
+          },
+          travelerType: {
+            type: 'string',
+            description: 'Type of traveler to tailor video results (e.g., "family", "couple", "solo", "friends")',
+          },
+          category: {
+            type: 'string',
+            enum: ['food', 'attractions', 'activities', 'nightlife', 'hidden_gems', 'general'],
+            description: 'Category of videos to search for',
+            default: 'general',
+          },
+        },
+        required: ['query', 'location'],
+      },
+    },
+  },
 ];
 
 /**

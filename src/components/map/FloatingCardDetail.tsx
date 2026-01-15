@@ -5,13 +5,14 @@ import { cn } from '@/lib/utils';
 import {
   X, Star, MapPin, Phone, Globe, Clock, DollarSign,
   Navigation, Heart, Share2, Calendar, Info, MessageSquare,
-  Camera, Wifi, Coffee, Dumbbell, ParkingCircle, AirVent,
+  Camera, Video, Wifi, Coffee, Dumbbell, ParkingCircle, AirVent,
   PawPrint, Flower2, Utensils, Home, Building2,
   Clock3, Ticket, ChevronLeft, ChevronRight, User, Loader2, Hotel
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useCallback } from 'react';
 import { PriceComparisonModal } from './PriceComparisonModal';
+import { PlaceVideoTab } from './PlaceVideoTab';
 
 interface FloatingCardDetailProps {
   card: Card | null;
@@ -19,7 +20,7 @@ interface FloatingCardDetailProps {
   onAddToTrip?: (card: Card) => void;
 }
 
-type TabType = 'overview' | 'reviews' | 'photos';
+type TabType = 'overview' | 'reviews' | 'photos' | 'videos';
 
 const AMENITY_ICONS: Record<string, typeof Wifi> = {
   'Free WiFi': Wifi,
@@ -220,6 +221,7 @@ export function FloatingCardDetail({ card, onClose, onAddToTrip }: FloatingCardD
     { id: 'overview', label: 'Overview', icon: Info },
     { id: 'reviews', label: 'Reviews', icon: MessageSquare },
     { id: 'photos', label: 'Photos', icon: Camera },
+    { id: 'videos', label: 'Videos', icon: Video },
   ];
 
   const handlePrevPhoto = () => {
@@ -745,6 +747,13 @@ export function FloatingCardDetail({ card, onClose, onAddToTrip }: FloatingCardD
                         </p>
                       )}
                     </div>
+                  )}
+
+                  {activeTab === 'videos' && (
+                    <PlaceVideoTab
+                      placeName={payload.name}
+                      placeId={payload.place_id || card.id}
+                    />
                   )}
                 </motion.div>
               </AnimatePresence>

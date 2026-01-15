@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { TripBoard } from '@/components/board/TripBoard';
 import { CompareDrawer } from '@/components/board/CompareDrawer';
 import { ChatBoard } from '@/components/chat-board/ChatBoard';
@@ -18,6 +19,8 @@ import { SignUpPromptBanner } from '@/components/auth/SignUpPromptBanner';
 import { FeedbackButton } from '@/components/feedback/FeedbackButton';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useTripContext } from '@/context/TripContext';
+import { ResearchView } from '@/components/research/ResearchView';
+import { PlanHeader, TripProgressBar } from '@/components/plan';
 import {
   Sparkles,
   LayoutDashboard,
@@ -27,12 +30,14 @@ import {
   Save,
   Share2,
   Loader2,
+  Compass,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
-export default function PlanPage() {
+function PlanPageContent() {
   const { user, loading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
   const {
     cards,
     trip,
@@ -45,6 +50,7 @@ export default function PlanPage() {
     isSaving,
     isHydrated,
     saveToDatabase,
+    loadTripFromDatabase,
     showSignInModal,
     setShowSignInModal,
     showCreateTripModal,
@@ -59,6 +65,23 @@ export default function PlanPage() {
   const [searchResults, setSearchResults] = useState<Card[] | null>(null);
   const [searchLocation, setSearchLocation] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Load trip from URL parameter if present
+  useEffect(() => {
+    const tripId = searchParams.get('trip_id');
+
+    // Only load if we have a trip_id and it's not the default 'draft'
+    if (tripId && tripId !== 'draft' && isHydrated) {
+      // Don't reload if already loaded
+      if (trip?.id === tripId) return;
+
+      loadTripFromDatabase(tripId).then((success) => {
+        if (!success) {
+          setToastMessage('Failed to load trip');
+        }
+      });
+    }
+  }, [searchParams, isHydrated, loadTripFromDatabase, trip?.id, setToastMessage]);
 
   const handleAddCard = (newCard: Card) => {
     addCard(newCard);
@@ -132,20 +155,20 @@ export default function PlanPage() {
     setToastMessage('Please save your trip before confirming places');
   };
 
-  // Default trip for display
+  // Default trip for display - use static dates to avoid hydration mismatch
   const displayTrip: Trip = {
     id: trip?.id || 'draft',
     user_id: user?.id || 'guest',
     title: trip?.title || 'My Trip',
     dates: trip?.dates || {
-      start: new Date().toISOString().split('T')[0],
-      end: new Date().toISOString().split('T')[0],
+      start: '',
+      end: '',
     },
     party_json: { adults: 1 },
     privacy: 'private',
     status: trip?.status || 'planning',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: '',
+    updated_at: '',
   };
 
   // Show loading state while hydrating
@@ -180,7 +203,7 @@ export default function PlanPage() {
           </div>
 
           {/* View Switcher */}
-          <div className="flex rounded-xl border-2 border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+          <div className="flex rounded-xl border-2 border-border/50 bg-card/50 backdrop-blur-sm overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setActiveView('map')}
               className={cn(
@@ -228,6 +251,18 @@ export default function PlanPage() {
             >
               <ShoppingBag className="h-4 w-4" />
               Shop
+            </button>
+            <button
+              onClick={() => setActiveView('research')}
+              className={cn(
+                'flex items-center gap-2 border-l-2 border-border/50 px-5 py-2.5 text-sm font-semibold transition-all duration-300',
+                activeView === 'research'
+                  ? 'gradient-primary text-white shadow-lg'
+                  : 'hover:bg-accent/50'
+              )}
+            >
+              <Compass className="h-4 w-4" />
+              Research
             </button>
           </div>
 
@@ -304,42 +339,63 @@ export default function PlanPage() {
         ) : activeView === 'chat' ? (
           <ChatBoard tripId="draft" />
         ) : activeView === 'map' ? (
-          <div className="flex h-full">
-            <PlacesSearchSidebar
-              cards={cards}
+          <div className="flex flex-col h-full">
+            {/* Plan Header with Destination Context */}
+            {searchLocation && (
+              <div className="px-6 pt-6 pb-4">
+                <PlanHeader destination={searchLocation} />
+              </div>
+            )}
+
+            {/* Map and Sidebar */}
+            <div className="flex flex-1 overflow-hidden pb-24">
+              <PlacesSearchSidebar
+                cards={cards}
+                tripId="draft"
+                hoveredCardId={hoveredCardId}
+                selectedCardId={selectedCardId}
+                onCardHover={setHoveredCardId}
+                onCardClick={(card) => {
+                  setSelectedCardId(card.id);
+                  setDetailCard(card);
+                }}
+                onAddToTrip={(card) => {
+                  const newCard = {
+                    ...card,
+                    trip_id: 'draft',
+                    labels: ['considering'],
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  };
+                  handleAddCard(newCard);
+                }}
+                onSearchResultsChange={setSearchResults}
+                onLocationChange={setSearchLocation}
+              />
+              <MapView
+                cards={cards}
+                selectedCardId={selectedCardId}
+                hoveredCardId={hoveredCardId}
+                onCardClick={(card) => {
+                  setSelectedCardId(card.id);
+                  setDetailCard(card);
+                }}
+                onCardHover={setHoveredCardId}
+                showSidebar={true}
+                searchResults={searchResults}
+                searchLocation={searchLocation}
+              />
+            </div>
+          </div>
+        ) : activeView === 'research' ? (
+          <div className="h-full overflow-auto">
+            <ResearchView
               tripId="draft"
-              hoveredCardId={hoveredCardId}
-              selectedCardId={selectedCardId}
-              onCardHover={setHoveredCardId}
-              onCardClick={(card) => {
-                setSelectedCardId(card.id);
-                setDetailCard(card);
-              }}
-              onAddToTrip={(card) => {
-                const newCard = {
-                  ...card,
-                  trip_id: 'draft',
-                  labels: ['considering'],
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                };
-                handleAddCard(newCard);
-              }}
-              onSearchResultsChange={setSearchResults}
-              onLocationChange={setSearchLocation}
-            />
-            <MapView
+              trip={displayTrip}
               cards={cards}
-              selectedCardId={selectedCardId}
-              hoveredCardId={hoveredCardId}
-              onCardClick={(card) => {
-                setSelectedCardId(card.id);
-                setDetailCard(card);
-              }}
-              onCardHover={setHoveredCardId}
-              showSidebar={true}
-              searchResults={searchResults}
-              searchLocation={searchLocation}
+              onCardUpdate={updateCard}
+              onCardDelete={deleteCard}
+              onAddCard={handleAddCard}
             />
           </div>
         ) : (
@@ -423,6 +479,33 @@ export default function PlanPage() {
         isAuthenticated={!!user}
         onSignUp={() => setShowSignInModal(true)}
       />
+
+      {/* Trip Progress Bar (Map view only) */}
+      {activeView === 'map' && cards.length > 0 && (
+        <TripProgressBar
+          cards={cards}
+          onBuildItinerary={() => {
+            // Navigate to board view to build itinerary
+            setActiveView('board');
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="flex h-screen items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
+export default function PlanPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <PlanPageContent />
+    </Suspense>
   );
 }

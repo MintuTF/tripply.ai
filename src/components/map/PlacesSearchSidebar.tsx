@@ -6,7 +6,7 @@ import { useMapSearch } from '@/hooks/useMapSearch';
 import { usePlacesSearch } from '@/hooks/usePlacesSearch';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { HorizontalFilters } from './HorizontalFilters';
-import { PlaceListItem } from './PlaceListItem';
+import { PlaceCard, AIRecommendations } from '@/components/plan';
 import { LocationAutocomplete } from './LocationAutocomplete';
 import { Search, Hotel, Utensils, Compass, X, MapPin, Loader2, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -64,9 +64,7 @@ export function PlacesSearchSidebar({
     }
   }, [isHydrated, confirmedLocation]);
 
-  // Store ALL fetched results across all types
-  const [allFetchedCards, setAllFetchedCards] = useState<Card[]>([]);
-  const [isFetchingAll, setIsFetchingAll] = useState(false);
+  // Note: Removed allFetchedCards state - now using usePlacesSearch with caching instead
 
   // Pagination: show 20 items initially, with "See More" to reveal rest
   const [visibleCount, setVisibleCount] = useState(20);
@@ -99,45 +97,20 @@ export function PlacesSearchSidebar({
     enabled: useRealTimeData && confirmedLocation.trim() !== '',
   });
 
-  // Determine which cards to display (filter from allFetchedCards if we have data)
+  // Determine which cards to display - use realTimePlaces from usePlacesSearch (cached)
   const filteredCards = useRealTimeData && confirmedLocation.trim() !== ''
-    ? (allFetchedCards.length > 0
-        ? allFetchedCards.filter(card => {
-            // Filter by type
-            if (typeFilter !== 'all' && card.type !== typeFilter) return false;
-            // Filter by search query
-            if (searchQuery) {
-              const payload = typeof card.payload_json === 'string'
-                ? JSON.parse(card.payload_json)
-                : card.payload_json;
-              const name = payload.name || payload.title || '';
-              if (!name.toLowerCase().includes(searchQuery.toLowerCase())) {
-                return false;
-              }
-            }
-            // Filter by rating
-            if (filters.rating !== null) {
-              const payload = typeof card.payload_json === 'string'
-                ? JSON.parse(card.payload_json)
-                : card.payload_json;
-              if (!payload.rating || payload.rating < filters.rating) {
-                return false;
-              }
-            }
-            return true;
-          })
-        : (realTimePlaces || []).filter(card => {
-            // Also filter realTimePlaces by rating
-            if (filters.rating !== null) {
-              const payload = typeof card.payload_json === 'string'
-                ? JSON.parse(card.payload_json)
-                : card.payload_json;
-              if (!payload.rating || payload.rating < filters.rating) {
-                return false;
-              }
-            }
-            return true;
-          }))
+    ? (realTimePlaces || []).filter(card => {
+        // Filter by rating
+        if (filters.rating !== null) {
+          const payload = typeof card.payload_json === 'string'
+            ? JSON.parse(card.payload_json)
+            : card.payload_json;
+          if (!payload.rating || payload.rating < filters.rating) {
+            return false;
+          }
+        }
+        return true;
+      })
     : localFilteredCards;
 
   // Deduplicate cards by id to prevent React key warnings
@@ -161,55 +134,17 @@ export function PlacesSearchSidebar({
     setUseRealTimeData(true);
   };
 
-  // Fetch all types in parallel when location changes
-  useEffect(() => {
-    if (!useRealTimeData || !confirmedLocation || confirmedLocation.trim() === '') {
-      setAllFetchedCards([]);
-      return;
-    }
-
-    const fetchAllTypes = async () => {
-      setIsFetchingAll(true);
-      try {
-        // Fetch all 3 types in parallel
-        const types: CardType[] = ['hotel', 'food', 'spot'];
-        const promises = types.map(async (type) => {
-          const queryParams = new URLSearchParams({
-            location: confirmedLocation,
-            type,
-          });
-          if (tripId) queryParams.append('trip_id', tripId);
-
-          const response = await fetch(`/api/places/search?${queryParams.toString()}`);
-          if (!response.ok) return [];
-
-          const result = await response.json();
-          return result.cards || [];
-        });
-
-        const results = await Promise.all(promises);
-        // Merge all results
-        const allCards = results.flat();
-        setAllFetchedCards(allCards);
-      } catch (error) {
-        console.error('Failed to fetch all types:', error);
-        setAllFetchedCards([]);
-      } finally {
-        setIsFetchingAll(false);
-      }
-    };
-
-    fetchAllTypes();
-  }, [confirmedLocation, useRealTimeData, tripId]);
+  // Note: Removed fetchAllTypes - now relying on usePlacesSearch which has 5-min caching
+  // This reduces API calls from 3 (all types) to 1 (current type) per location change
 
   // Notify parent of search results changes
   useEffect(() => {
     if (useRealTimeData && confirmedLocation.trim() !== '') {
-      onSearchResultsChange?.(allFetchedCards.length > 0 ? displayCards : (realTimePlaces || []));
+      onSearchResultsChange?.(displayCards.length > 0 ? displayCards : (realTimePlaces || []));
     } else {
       onSearchResultsChange?.(null);
     }
-  }, [allFetchedCards.length, realTimePlaces, useRealTimeData, confirmedLocation]);
+  }, [displayCards.length, realTimePlaces, useRealTimeData, confirmedLocation]);
 
   // Notify parent of location changes
   useEffect(() => {
@@ -218,145 +153,120 @@ export function PlacesSearchSidebar({
 
   return (
     <div className="flex h-full w-[420px] flex-col border-r-2 border-border bg-card/50 backdrop-blur-sm">
-      <div className="border-b-2 border-border p-4 space-y-4">
-        {/* Location/City Search with Autocomplete */}
+      {/* Sticky Header - Compact */}
+      <div className="flex-shrink-0 border-b-2 border-border p-4 space-y-3">
+        {/* Location Search */}
         <LocationAutocomplete
           value={location}
           onChange={(value) => {
             setLocation(value);
-            // Don't trigger search while typing - only on selection
             if (value.trim() === '') {
               setConfirmedLocation('');
               setUseRealTimeData(false);
             }
           }}
           onSelect={handleLocationSelect}
-          placeholder="Try Dallas, TX or Paris, France"
+          placeholder="Search destination..."
           hasError={!!placesError}
         />
 
-        {/* Search within results */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={useRealTimeData && location ? "Search hotels, restaurants..." : "Search saved places..."}
-            className={cn(
-              'w-full rounded-xl border-2 border-border bg-background pl-10 pr-10 py-3',
-              'text-sm text-foreground placeholder:text-muted-foreground',
-              'transition-all duration-300',
-              'focus:outline-none focus:border-primary focus:shadow-glow'
-            )}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-muted transition-colors"
-            >
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+        {/* Type Filter Tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {TYPE_TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = typeFilter === tab.id;
-            // Calculate count from ALL fetched cards (not just filtered displayCards)
             const count = (useRealTimeData && allFetchedCards.length > 0
               ? allFetchedCards
               : displayCards
             ).filter((c) => c.type === tab.id).length;
 
             return (
-              <motion.button
+              <button
                 key={tab.id}
                 onClick={() => setTypeFilter(tab.id)}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
                 className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
-                  'transition-all duration-300 flex-shrink-0',
+                  'flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium flex-shrink-0',
+                  'transition-all duration-200',
                   isActive
-                    ? 'gradient-primary text-white shadow-lg'
-                    : 'border-2 border-border bg-background text-foreground hover:border-primary/50'
+                    ? 'gradient-primary text-white'
+                    : 'border border-border bg-background hover:border-primary/50'
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-3.5 w-3.5" />
                 <span>{tab.label}</span>
-                <motion.span
-                  layout
-                  className={cn(
-                    'rounded-full px-1.5 py-0.5 text-xs font-bold',
-                    isActive ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
-                  )}
-                >
+                <span className={cn(
+                  'rounded-full px-1.5 py-0.5 text-xs font-bold',
+                  isActive ? 'bg-white/20' : 'bg-muted'
+                )}>
                   {count}
-                </motion.span>
-              </motion.button>
+                </span>
+              </button>
             );
           })}
         </div>
 
-        {/* Status info */}
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          className="text-xs text-muted-foreground flex items-center justify-between gap-2"
-        >
-          <div className="flex items-center gap-2">
-            {(isLoadingPlaces || isFetchingAll) && (
-              <Loader2 className="h-3 w-3 animate-spin text-primary" />
+        {/* Search Bar - Compact */}
+        {confirmedLocation && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search places..."
+              className="w-full rounded-lg border border-border bg-background pl-9 pr-9 py-2 text-sm focus:outline-none focus:border-primary"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded"
+              >
+                <X className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
             )}
-            <span>
-              {useRealTimeData && confirmedLocation
-                ? `${displayCards.length} places in ${confirmedLocation}`
-                : `${displayCards.length} saved places`}
-            </span>
           </div>
-          {(hasActiveFilters || searchQuery || confirmedLocation) && (
-            <motion.button
-              onClick={() => {
-                setSearchQuery('');
-                setTypeFilter('hotel');
-                setLocation('');
-                setConfirmedLocation('');
-                setUseRealTimeData(false);
-                setAllFetchedCards([]);
-                clearFilters();
-              }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="text-primary hover:underline font-medium"
-            >
-              Clear all
-            </motion.button>
-          )}
-        </motion.div>
+        )}
 
-        {/* Error state */}
+        {/* Status Bar - Compact */}
+        {confirmedLocation && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              {(isLoadingPlaces || isFetchingAll) && (
+                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+              )}
+              <span>{displayCards.length} places</span>
+            </div>
+            {(searchQuery || filters.rating) && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  clearFilters();
+                }}
+                className="text-primary hover:underline font-medium"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Error */}
         {placesError && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            className="rounded-lg bg-destructive/10 border border-destructive/20 p-3"
-          >
-            <p className="text-xs text-destructive font-medium leading-relaxed">
-              {placesError}
-            </p>
-          </motion.div>
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2">
+            <p className="text-xs text-destructive">{placesError}</p>
+          </div>
         )}
       </div>
 
-      <HorizontalFilters
-        activeType={typeFilter}
-        filters={filters}
-        onFiltersChange={setFilters}
-        onClearFilters={clearFilters}
-      />
+      {/* Filters - Compact Strip */}
+      {confirmedLocation && (
+        <HorizontalFilters
+          activeType={typeFilter}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onClearFilters={clearFilters}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
@@ -451,44 +361,48 @@ export function PlacesSearchSidebar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 space-y-3"
+              className="p-3 space-y-3"
             >
-              {visibleCards.map((card, index) => (
-                <motion.div
-                  key={card.id || `place-${index}`}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{
-                    duration: 0.3,
-                    delay: index * 0.05,
-                    ease: [0.25, 0.1, 0.25, 1]
-                  }}
-                >
-                  <PlaceListItem
-                    card={card}
-                    isHovered={hoveredCardId === card.id}
-                    isSelected={selectedCardId === card.id}
-                    onHover={() => onCardHover?.(card.id)}
-                    onLeave={() => onCardHover?.(undefined)}
-                    onClick={() => onCardClick?.(card)}
-                    onAddToTrip={() => onAddToTrip?.(card)}
-                    onToggleFavorite={() => {
-                      console.log('Toggle favorite:', card.id);
-                    }}
-                  />
-                </motion.div>
-              ))}
+              {/* AI Recommendations Section */}
+              {useRealTimeData && confirmedLocation && visibleCards.length > 0 && (
+                <AIRecommendations
+                  destination={confirmedLocation}
+                  className="mb-2"
+                />
+              )}
 
-              {/* See More button - show when there are more results to display */}
+              {/* Places Grid */}
+              <div className="space-y-3">
+                {visibleCards.map((card, index) => (
+                  <motion.div
+                    key={card.id || `place-${index}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.2,
+                      delay: index * 0.02,
+                    }}
+                  >
+                    <PlaceCard
+                      card={card}
+                      isHovered={hoveredCardId === card.id}
+                      isSelected={selectedCardId === card.id}
+                      onHover={(id) => onCardHover?.(id || undefined)}
+                      onClick={() => onCardClick?.(card)}
+                      onAddToTrip={() => onAddToTrip?.(card)}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Load More */}
               {displayCards.length > visibleCount && (
-                <motion.button
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                <button
                   onClick={() => setVisibleCount(prev => Math.min(prev + 20, displayCards.length))}
-                  className="w-full py-3 text-primary font-medium hover:bg-accent/50 rounded-lg transition-colors border-2 border-dashed border-border hover:border-primary"
+                  className="w-full py-2.5 text-sm text-primary font-medium hover:bg-accent rounded-lg transition-colors border border-dashed border-border hover:border-primary"
                 >
-                  See More ({displayCards.length - visibleCount} more)
-                </motion.button>
+                  Show {Math.min(20, displayCards.length - visibleCount)} More
+                </button>
               )}
             </motion.div>
           )}

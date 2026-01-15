@@ -1,4 +1,4 @@
-import { createServerComponentClient } from '@/lib/db/supabase';
+import { createServerComponentClient } from '@/lib/db/supabase-server';
 import { createShareLink, getTripShareLinks, getTrip } from '@/lib/db/queries';
 import { NextResponse } from 'next/server';
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BudgetTier, ProductCategory } from '@/types/marketplace';
 import { CATEGORIES } from '@/lib/marketplace/categories';
-import { Search, X } from 'lucide-react';
+import { Search, X, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface FilterBarProps {
   onFiltersChange: (filters: {
@@ -27,121 +28,152 @@ export function FilterBar({ onFiltersChange, initialFilters }: FilterBarProps) {
     initialFilters?.categories || []
   );
   const [searchQuery, setSearchQuery] = useState(initialFilters?.searchQuery || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Trigger filter change when debounced search updates
+  useEffect(() => {
+    onFiltersChange({
+      budgetTier,
+      categories: selectedCategories.length > 0 ? selectedCategories : undefined,
+      searchQuery: debouncedSearch || undefined,
+    });
+  }, [debouncedSearch, budgetTier, selectedCategories, onFiltersChange]);
 
   const handleBudgetChange = (tier: BudgetTier | undefined) => {
     setBudgetTier(tier);
-    onFiltersChange({ budgetTier: tier, categories: selectedCategories, searchQuery });
   };
 
-  const handleCategoryToggle = (category: ProductCategory) => {
-    const newCategories = selectedCategories.includes(category)
-      ? selectedCategories.filter((c) => c !== category)
-      : [...selectedCategories, category];
-    setSelectedCategories(newCategories);
-    onFiltersChange({
-      budgetTier,
-      categories: newCategories.length > 0 ? newCategories : undefined,
-      searchQuery,
-    });
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value as ProductCategory;
+    if (value) {
+      setSelectedCategories([value]); // Single selection for compact mode
+    } else {
+      setSelectedCategories([]);
+    }
   };
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
-    onFiltersChange({
-      budgetTier,
-      categories: selectedCategories.length > 0 ? selectedCategories : undefined,
-      searchQuery: value || undefined,
-    });
   };
 
   const clearFilters = () => {
     setBudgetTier(undefined);
     setSelectedCategories([]);
     setSearchQuery('');
-    onFiltersChange({});
   };
 
   const hasActiveFilters = budgetTier || selectedCategories.length > 0 || searchQuery;
 
+  const budgetOptions = [
+    { tier: 'budget' as BudgetTier, icon: '💰', label: 'Budget' },
+    { tier: 'mid-range' as BudgetTier, icon: '⭐', label: 'Value' },
+    { tier: 'premium' as BudgetTier, icon: '✨', label: 'Premium' }
+  ];
+
   return (
-    <div className="flex items-center gap-3 px-4 py-2 border-b border-border/50 bg-card/30">
-      {/* Search Bar - Compact */}
-      <div className="relative w-56 flex-shrink-0">
-        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          placeholder="Search travel gear..."
-          className="h-8 w-full rounded-lg border border-border/50 bg-background pl-8 pr-8 text-xs transition-all focus-visible:outline-none focus-visible:border-primary"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => handleSearchChange('')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+    <div className="sticky top-[48px] z-20 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm marketplace-filter-bar">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2">
+        <div className="flex flex-row items-center gap-2 flex-wrap sm:flex-nowrap">
+          {/* Compact Search Bar */}
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search..."
+              className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-9 text-xs placeholder:text-gray-400 transition-all focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
+            />
+            {searchQuery && (
+              <motion.button
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                onClick={() => handleSearchChange('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </motion.button>
+            )}
+          </div>
+
+          {/* Icon-only Budget Pills */}
+          <div className="flex gap-1">
+            {budgetOptions.map(({ tier, icon, label }) => {
+              const isSelected = budgetTier === tier;
+              return (
+                <button
+                  key={tier}
+                  onClick={() => handleBudgetChange(budgetTier === tier ? undefined : tier)}
+                  className={cn(
+                    'w-8 h-8 rounded-full text-base flex items-center justify-center transition-all',
+                    isSelected
+                      ? 'bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-200 shadow-sm ring-2 ring-purple-200'
+                      : 'bg-gray-50 border border-gray-200 hover:border-purple-200 hover:bg-purple-50'
+                  )}
+                  title={label}
+                  aria-label={label}
+                >
+                  {icon}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Category Dropdown */}
+          <select
+            value={selectedCategories[0] || ''}
+            onChange={handleCategoryChange}
+            className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs max-w-[140px] transition-all focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
           >
-            <X className="h-3 w-3" />
-          </button>
-        )}
-      </div>
+            <option value="">All Categories</option>
+            {CATEGORIES.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
 
-      {/* Divider */}
-      <div className="h-6 w-px bg-border/50" />
+          {/* Compact Clear Button */}
+          <AnimatePresence>
+            {hasActiveFilters && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                onClick={clearFilters}
+                className="h-9 w-9 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 flex items-center justify-center transition-all"
+                title="Clear all filters"
+                aria-label="Clear all filters"
+              >
+                <X className="h-4 w-4 text-gray-600" />
+              </motion.button>
+            )}
+          </AnimatePresence>
 
-      {/* Budget Tier Filter - Inline */}
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-xs text-muted-foreground">Budget:</span>
-        <div className="flex rounded-md border border-border/50 overflow-hidden">
-          {(['budget', 'mid-range', 'premium'] as BudgetTier[]).map((tier) => (
-            <button
-              key={tier}
-              onClick={() => handleBudgetChange(budgetTier === tier ? undefined : tier)}
-              className={cn(
-                'px-2 py-1 text-xs font-medium transition-all',
-                budgetTier === tier
-                  ? 'bg-primary text-white'
-                  : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {tier === 'budget' ? '💰 Budget' : tier === 'mid-range' ? '⭐ Value' : '✨ Premium'}
-            </button>
-          ))}
+          {/* Active filters count indicator (mobile-friendly) */}
+          {hasActiveFilters && (
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-gray-600">
+              <Filter className="h-3.5 w-3.5" />
+              <span>
+                {[
+                  budgetTier,
+                  selectedCategories.length > 0 && `${selectedCategories.length} cat`,
+                  searchQuery && 'search'
+                ].filter(Boolean).length} active
+              </span>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Divider */}
-      <div className="h-6 w-px bg-border/50" />
-
-      {/* Category Pills - Horizontal Scroll */}
-      <div className="flex-1 overflow-x-auto scrollbar-hide">
-        <div className="flex gap-1.5">
-          {CATEGORIES.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => handleCategoryToggle(category.id)}
-              className={cn(
-                'rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition-all',
-                selectedCategories.includes(category.id)
-                  ? 'bg-primary text-white'
-                  : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Clear Button */}
-      {hasActiveFilters && (
-        <button
-          onClick={clearFilters}
-          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 flex-shrink-0"
-        >
-          <X className="h-3 w-3" />
-          Clear
-        </button>
-      )}
     </div>
   );
 }

@@ -88,10 +88,10 @@ export async function middleware(request: NextRequest) {
     // Auth-based redirects
     const pathname = request.nextUrl.pathname;
 
-    // If user is authenticated and on landing page, redirect to /plan
+    // If user is authenticated and on landing page, redirect to /travel
     if (user && pathname === '/') {
       const url = request.nextUrl.clone();
-      url.pathname = '/plan';
+      url.pathname = '/travel';
       return NextResponse.redirect(url);
     }
   }

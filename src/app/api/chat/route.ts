@@ -1,4 +1,4 @@
-import { createServerComponentClient } from '@/lib/db/supabase';
+import { createServerComponentClient } from '@/lib/db/supabase-server';
 import { createMessage, getTripMessages, getTrip } from '@/lib/db/queries';
 import { orchestrateChat } from '@/lib/ai/orchestrator';
 import { NextResponse } from 'next/server';

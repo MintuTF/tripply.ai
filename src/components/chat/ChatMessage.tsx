@@ -10,9 +10,10 @@ import { useTripList } from '@/hooks/useTripList';
 interface ChatMessageProps {
   message: Message;
   isLatest?: boolean;
+  destinationCity?: string;
 }
 
-export function ChatMessage({ message, isLatest }: ChatMessageProps) {
+export function ChatMessage({ message, isLatest, destinationCity }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const { addToTrip, savePlace } = useTripList();
@@ -37,7 +38,7 @@ export function ChatMessage({ message, isLatest }: ChatMessageProps) {
 
         {/* Markdown Content */}
         <div className="prose prose-gray max-w-none dark:prose-invert">
-          <MarkdownRenderer content={message.text} />
+          <MarkdownRenderer content={message.text} onAddToShortlist={savePlace} destinationCity={destinationCity} />
         </div>
 
         {/* Tool Calls - Simplified badges */}

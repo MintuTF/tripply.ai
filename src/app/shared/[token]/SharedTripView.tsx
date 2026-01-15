@@ -66,21 +66,56 @@ export function SharedTripView({ trip, cards: initialCards, role }: SharedTripVi
   };
 
   // Handle card updates (only for editors)
-  const handleCardUpdate = async (updatedCard: Card) => {
+  const handleCardUpdate = async (cardId: string, updates: Partial<Card>) => {
     if (role !== 'editor') return;
 
-    setCards(prev => prev.map(c => c.id === updatedCard.id ? updatedCard : c));
+    // Optimistic update
+    setCards(prev => prev.map(c => c.id === cardId ? { ...c, ...updates } : c));
 
-    // TODO: Save to database
+    // Save to database
+    try {
+      const response = await fetch(`/api/cards/${cardId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        // Revert on failure
+        setCards(initialCards);
+        console.error('Failed to update card');
+      }
+    } catch (error) {
+      // Revert on error
+      setCards(initialCards);
+      console.error('Error updating card:', error);
+    }
   };
 
   // Handle card deletion (only for editors)
   const handleCardDelete = async (cardId: string) => {
     if (role !== 'editor') return;
 
+    // Optimistic delete
+    const previousCards = cards;
     setCards(prev => prev.filter(c => c.id !== cardId));
 
-    // TODO: Delete from database
+    // Delete from database
+    try {
+      const response = await fetch(`/api/cards/${cardId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        // Revert on failure
+        setCards(previousCards);
+        console.error('Failed to delete card');
+      }
+    } catch (error) {
+      // Revert on error
+      setCards(previousCards);
+      console.error('Error deleting card:', error);
+    }
   };
 
   return (
@@ -171,8 +206,8 @@ export function SharedTripView({ trip, cards: initialCards, role }: SharedTripVi
             tripId={trip.id}
             trip={trip}
             cards={cards}
-            onCardUpdate={role === 'editor' ? handleCardUpdate : undefined}
-            onCardDelete={role === 'editor' ? handleCardDelete : undefined}
+            onCardUpdate={role === 'editor' ? (cardId, updates) => handleCardUpdate(cardId, updates) : undefined}
+            onCardDelete={role === 'editor' ? (cardId) => handleCardDelete(cardId) : undefined}
           />
         ) : (
           <MapView

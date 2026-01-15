@@ -1,5 +1,6 @@
 import type { PlaceCard, ToolCall, PlaceResult } from '@/types';
 import type { HotelResult } from '../tools/hotelSearch';
+import { generateUUID } from '@/lib/utils';
 
 /**
  * Extract structured card data from tool results
@@ -45,7 +46,7 @@ function createPlaceCard(place: PlaceResult, queryType?: string): PlaceCard {
   const cardType = determineCardType(place.types, queryType);
 
   const card: PlaceCard = {
-    id: place.place_id || crypto.randomUUID(),
+    id: place.place_id || generateUUID(),
     type: cardType,
     name: place.name,
     address: place.address,

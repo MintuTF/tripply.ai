@@ -6,6 +6,8 @@ export interface UseAutocompleteOptions {
   types?: string;
   enabled?: boolean;
   debounceMs?: number;
+  location?: string; // lat,lng format for location bias
+  radius?: number; // radius in meters for location bias
 }
 
 export interface UseAutocompleteReturn {
@@ -37,6 +39,8 @@ export function useAutocomplete(options: UseAutocompleteOptions): UseAutocomplet
     types = '(cities)',
     enabled = true,
     debounceMs = 350, // Increased debounce to prevent rate limiting
+    location,
+    radius,
   } = options;
 
   const [predictions, setPredictions] = useState<AutocompletePrediction[]>([]);
@@ -46,7 +50,12 @@ export function useAutocomplete(options: UseAutocompleteOptions): UseAutocomplet
   const debounceTimerRef = useRef<NodeJS.Timeout>();
   const abortControllerRef = useRef<AbortController>();
 
-  const fetchPredictions = useCallback(async (searchInput: string, searchTypes: string) => {
+  const fetchPredictions = useCallback(async (
+    searchInput: string,
+    searchTypes: string,
+    searchLocation?: string,
+    searchRadius?: number
+  ) => {
     if (!searchInput || searchInput.trim().length < 2) {
       setPredictions([]);
       setIsLoading(false);
@@ -59,8 +68,8 @@ export function useAutocomplete(options: UseAutocompleteOptions): UseAutocomplet
       abortControllerRef.current.abort();
     }
 
-    // Check cache
-    const cacheKey = `${searchInput}:${searchTypes}`;
+    // Check cache (include location in cache key)
+    const cacheKey = `${searchInput}:${searchTypes}:${searchLocation || 'none'}:${searchRadius || 0}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       setPredictions(cached.predictions);
@@ -89,6 +98,14 @@ export function useAutocomplete(options: UseAutocompleteOptions): UseAutocomplet
         input: searchInput,
         types: searchTypes,
       });
+
+      // Add location bias if provided
+      if (searchLocation) {
+        queryParams.set('location', searchLocation);
+      }
+      if (searchRadius) {
+        queryParams.set('radius', searchRadius.toString());
+      }
 
       const response = await fetch(`/api/places/autocomplete?${queryParams.toString()}`, {
         signal: abortControllerRef.current.signal,
@@ -163,7 +180,7 @@ export function useAutocomplete(options: UseAutocompleteOptions): UseAutocomplet
 
     // Debounce the fetch
     debounceTimerRef.current = setTimeout(() => {
-      fetchPredictions(input, types);
+      fetchPredictions(input, types, location, radius);
     }, debounceMs);
 
     return () => {
@@ -174,7 +191,7 @@ export function useAutocomplete(options: UseAutocompleteOptions): UseAutocomplet
         abortControllerRef.current.abort();
       }
     };
-  }, [input, types, enabled, debounceMs, fetchPredictions]);
+  }, [input, types, enabled, debounceMs, location, radius, fetchPredictions]);
 
   const clear = useCallback(() => {
     setPredictions([]);

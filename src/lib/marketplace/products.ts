@@ -1,1059 +1,290 @@
 /**
- * Hardcoded product catalog for the Travel Marketplace
- * Products are curated with affiliate links (placeholder tags)
+ * Real Amazon Products for Voyagr Marketplace
+ * Fetches from database with fallback to static products
  */
 
-import { Product } from '@/types/marketplace';
+import type { Product, ProductCategory } from '@/types/marketplace';
+import { createServiceRoleClient } from '@/lib/db/supabase';
+
+// Cache for database products
+let cachedProducts: Product[] | null = null;
+let cacheTimestamp: number = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch products from database
+ */
+export async function fetchProductsFromDB(): Promise<Product[]> {
+  // Check cache first
+  if (cachedProducts && Date.now() - cacheTimestamp < CACHE_DURATION) {
+    return cachedProducts;
+  }
+
+  try {
+    const supabase = createServiceRoleClient();
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching products from DB:', error);
+      return PRODUCTS; // Fallback to static products
+    }
+
+    if (!data || data.length === 0) {
+      return PRODUCTS; // Fallback to static products
+    }
+
+    // Transform database format to Product type
+    const products: Product[] = data.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      shortDescription: row.short_description || row.description?.substring(0, 100) || '',
+      image: row.image || '',
+      price: row.price || 0,
+      affiliateUrl: row.affiliate_url || '',
+      category: row.category || 'essentials',
+      tags: row.tags || [],
+      budgetTier: row.budget_tier || 'mid-range',
+      rating: row.rating,
+      reviewCount: row.review_count || 0,
+      weatherConditions: row.weather_conditions || [],
+      tripTypes: row.trip_types || [],
+      activities: row.activities || [],
+      destinations: row.destinations || [],
+    }));
+
+    // Update cache
+    cachedProducts = products;
+    cacheTimestamp = Date.now();
+
+    return products;
+  } catch (err) {
+    console.error('Error in fetchProductsFromDB:', err);
+    return PRODUCTS; // Fallback to static products
+  }
+}
 
 export const PRODUCTS: Product[] = [
-  // ============ ORGANIZATION ============
   {
-    id: 'packing-cubes-6pc',
-    name: 'Compression Packing Cubes (6-Pack)',
-    description: 'Save up to 60% space in your luggage with these compression packing cubes. Includes 3 sizes for versatile packing.',
-    shortDescription: 'Essential for organized packing and maximizing luggage space.',
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400',
-    price: 29.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07JGCGT5Q',
-    category: 'organization',
-    tags: ['compression', 'organization', 'essential', 'space-saving'],
-    rating: 4.7,
-    reviewCount: 45000,
-    budgetTier: 'mid-range',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'toiletry-bag-hanging',
-    name: 'Hanging Toiletry Bag',
-    description: 'Water-resistant toiletry organizer with multiple compartments and hanging hook. Perfect for hotel bathrooms.',
-    shortDescription: 'Keeps toiletries organized and easily accessible.',
-    image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400',
-    price: 24.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07D6PXYF3',
-    category: 'organization',
-    tags: ['toiletry', 'hanging', 'water-resistant'],
-    rating: 4.6,
-    reviewCount: 28000,
-    budgetTier: 'mid-range',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'shoe-bags-4pack',
-    name: 'Travel Shoe Bags (4-Pack)',
-    description: 'Waterproof shoe bags to keep your clothes clean and shoes protected.',
-    shortDescription: 'Protect your clothes from dirty shoes.',
-    image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400',
-    price: 12.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07GJVD7YM',
-    category: 'organization',
-    tags: ['shoes', 'waterproof', 'organization'],
-    rating: 4.5,
-    reviewCount: 15000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-
-  // ============ ELECTRONICS ============
-  {
-    id: 'universal-adapter',
-    name: 'Universal Travel Adapter',
-    description: 'Works in 150+ countries with 4 USB ports and 1 USB-C. Compact design fits any outlet type.',
-    shortDescription: 'One adapter for worldwide travel - charges up to 5 devices.',
-    image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400',
-    price: 29.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07FQLMTQN',
-    category: 'electronics',
-    tags: ['adapter', 'USB', 'international', 'essential'],
-    rating: 4.7,
-    reviewCount: 52000,
-    budgetTier: 'mid-range',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'portable-charger-20000',
-    name: 'Portable Charger 20000mAh',
-    description: 'High-capacity power bank with USB-C PD fast charging. Charges iPhone 14 up to 5 times.',
-    shortDescription: 'Never run out of battery on long travel days.',
-    image: 'https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?w=400',
-    price: 39.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B08JV4MRDQ',
-    category: 'electronics',
-    tags: ['power-bank', 'USB-C', 'fast-charging', 'essential'],
-    rating: 4.8,
-    reviewCount: 89000,
-    budgetTier: 'mid-range',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'noise-canceling-earbuds',
-    name: 'Noise Canceling Wireless Earbuds',
-    description: 'Premium ANC earbuds with 30-hour battery life. Perfect for flights and noisy environments.',
-    shortDescription: 'Block out airplane noise and enjoy your music.',
-    image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400',
-    price: 149.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B0BDHWDR12',
-    category: 'electronics',
-    tags: ['ANC', 'wireless', 'bluetooth', 'premium'],
-    rating: 4.6,
-    reviewCount: 34000,
-    budgetTier: 'premium',
-    tripTypes: ['business', 'luxury'],
-    activities: ['flight', 'long-haul'],
-  },
-  {
-    id: 'travel-surge-protector',
-    name: 'Travel Power Strip with USB',
-    description: 'Compact power strip with 3 outlets and 3 USB ports. Flat plug design for tight spaces.',
-    shortDescription: 'Charge all your devices from one outlet.',
-    image: 'https://images.unsplash.com/photo-1544866092-1935c5ef2a8f?w=400',
-    price: 19.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07PGLXK2D',
-    category: 'electronics',
-    tags: ['power-strip', 'USB', 'compact'],
-    rating: 4.7,
-    reviewCount: 42000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-
-  // ============ COMFORT ============
-  {
-    id: 'neck-pillow-memory-foam',
-    name: 'Memory Foam Travel Neck Pillow',
-    description: 'Ergonomic neck pillow with adjustable clasp. Includes sleep mask and earplugs.',
-    shortDescription: 'Sleep comfortably on long flights.',
-    image: 'https://images.unsplash.com/photo-1520923642038-b4259acecbd7?w=400',
-    price: 34.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07HMQD21J',
-    category: 'comfort',
-    tags: ['neck-pillow', 'memory-foam', 'flight', 'sleep'],
-    rating: 4.5,
-    reviewCount: 67000,
-    budgetTier: 'mid-range',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-    activities: ['flight', 'long-haul'],
-  },
-  {
-    id: 'compression-socks',
-    name: 'Compression Socks (3-Pack)',
-    description: 'Medical-grade compression socks to prevent swelling and DVT on long flights.',
-    shortDescription: 'Prevent leg swelling and improve circulation.',
-    image: 'https://images.unsplash.com/photo-1586350977771-b3b0abd50c82?w=400',
-    price: 19.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07R7XVMFY',
-    category: 'comfort',
-    tags: ['compression', 'flight', 'health', 'socks'],
-    rating: 4.6,
-    reviewCount: 23000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-    activities: ['flight', 'long-haul'],
-  },
-  {
-    id: 'eye-mask-silk',
-    name: 'Silk Sleep Mask',
-    description: 'Luxurious 100% mulberry silk eye mask. Blocks light completely with adjustable strap.',
-    shortDescription: 'Block out light for better sleep anywhere.',
-    image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400',
-    price: 16.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07RXNK1JZ',
-    category: 'comfort',
-    tags: ['sleep-mask', 'silk', 'sleep', 'eye-mask'],
-    rating: 4.7,
-    reviewCount: 31000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'foot-rest-hammock',
-    name: 'Airplane Foot Rest Hammock',
-    description: 'Portable foot hammock that attaches to tray table. Reduces leg fatigue on long flights.',
-    shortDescription: 'Rest your feet comfortably on flights.',
-    image: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=400',
-    price: 14.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B077G3RJ8K',
-    category: 'comfort',
-    tags: ['foot-rest', 'flight', 'comfort'],
-    rating: 4.3,
-    reviewCount: 18000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-    activities: ['flight', 'long-haul'],
-  },
-
-  // ============ WEATHER GEAR ============
-  {
-    id: 'rain-jacket-packable',
-    name: 'Ultralight Packable Rain Jacket',
-    description: 'Waterproof, breathable, and packs into its own pocket. Weighs only 8oz.',
-    shortDescription: 'Be prepared for unexpected rain - packs tiny.',
-    image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400',
-    price: 79.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B08X4DRNZV',
-    category: 'weather',
-    tags: ['waterproof', 'packable', 'lightweight', 'rain'],
-    rating: 4.5,
-    reviewCount: 12000,
-    budgetTier: 'mid-range',
-    weatherConditions: ['rainy', 'temperate'],
-    destinations: ['seattle', 'london', 'vancouver', 'portland', 'amsterdam'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
-  {
-    id: 'travel-umbrella-compact',
-    name: 'Windproof Travel Umbrella',
-    description: 'Compact umbrella with reinforced fiberglass ribs. Survives 55mph winds.',
-    shortDescription: 'Compact umbrella that fits in any bag.',
-    image: 'https://images.unsplash.com/photo-1534309466160-70b22cc6252c?w=400',
-    price: 24.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B0713LJN47',
-    category: 'weather',
-    tags: ['umbrella', 'windproof', 'compact', 'rain'],
-    rating: 4.6,
-    reviewCount: 56000,
-    budgetTier: 'budget',
-    weatherConditions: ['rainy', 'temperate'],
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'sun-hat-packable',
-    name: 'Packable Sun Hat UPF 50+',
-    description: 'Wide-brim sun hat with UPF 50+ protection. Folds flat without losing shape.',
-    shortDescription: 'Protect your face from harsh sun.',
-    image: 'https://images.unsplash.com/photo-1572307480813-ceb0e59d8325?w=400',
-    price: 29.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07B4KYF5C',
-    category: 'weather',
-    tags: ['sun-hat', 'UPF', 'packable', 'beach'],
-    rating: 4.5,
-    reviewCount: 19000,
-    budgetTier: 'mid-range',
-    weatherConditions: ['tropical', 'desert'],
-    destinations: ['hawaii', 'cancun', 'bali', 'dubai', 'thailand'],
-    activities: ['beach', 'sightseeing'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'thermal-base-layer',
-    name: 'Merino Wool Base Layer Set',
-    description: 'Lightweight merino wool base layer for warmth without bulk. Naturally odor-resistant.',
-    shortDescription: 'Stay warm in cold climates without bulky layers.',
-    image: 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=400',
-    price: 89.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07XLRNY3S',
-    category: 'weather',
-    tags: ['thermal', 'merino', 'base-layer', 'cold-weather'],
-    rating: 4.7,
-    reviewCount: 8500,
-    budgetTier: 'premium',
-    weatherConditions: ['cold'],
-    destinations: ['iceland', 'norway', 'switzerland', 'canada', 'alaska'],
-    activities: ['skiing', 'hiking', 'winter-sports'],
-    tripTypes: ['adventure', 'luxury'],
-  },
-  {
-    id: 'waterproof-shoe-covers',
-    name: 'Waterproof Shoe Covers',
-    description: 'Reusable silicone shoe covers that protect shoes from rain and mud.',
-    shortDescription: 'Keep your shoes dry in rainy weather.',
-    image: 'https://images.unsplash.com/photo-1560769629-975ec94e6a86?w=400',
-    price: 14.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07XLWJ8PK',
-    category: 'weather',
-    tags: ['waterproof', 'shoes', 'rain', 'reusable'],
-    rating: 4.3,
-    reviewCount: 7200,
-    budgetTier: 'budget',
-    weatherConditions: ['rainy'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
-
-  // ============ SAFETY ============
-  {
-    id: 'tsa-locks-4pack',
-    name: 'TSA Approved Locks (4-Pack)',
-    description: 'Combination locks with TSA master key access. No keys to lose.',
-    shortDescription: 'Secure your luggage while allowing TSA inspection.',
-    image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400',
-    price: 14.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07QQXL7B2',
-    category: 'safety',
-    tags: ['TSA', 'lock', 'security', 'luggage'],
-    rating: 4.6,
-    reviewCount: 38000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'money-belt-rfid',
-    name: 'RFID Blocking Money Belt',
-    description: 'Slim money belt worn under clothes. Blocks RFID scanners from stealing card info.',
-    shortDescription: 'Keep cash and cards secure and hidden.',
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400',
-    price: 19.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07GVXMF9V',
-    category: 'safety',
-    tags: ['RFID', 'money-belt', 'security', 'anti-theft'],
-    rating: 4.5,
-    reviewCount: 24000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-    destinations: ['europe', 'barcelona', 'paris', 'rome', 'prague'],
-  },
-  {
-    id: 'first-aid-kit-travel',
-    name: 'Compact First Aid Kit',
-    description: '100-piece first aid kit in a compact case. Includes bandages, antiseptic, medications.',
-    shortDescription: 'Be prepared for minor injuries and ailments.',
-    image: 'https://images.unsplash.com/photo-1603398938378-e54eab446dde?w=400',
-    price: 16.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07VFLNW3P',
-    category: 'safety',
-    tags: ['first-aid', 'medical', 'safety', 'emergency'],
-    rating: 4.7,
-    reviewCount: 29000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-    activities: ['hiking', 'camping', 'adventure'],
-  },
-  {
-    id: 'door-alarm-portable',
-    name: 'Portable Door Alarm',
-    description: 'Motion-detecting door alarm for hotel rooms. 120dB siren alerts you to intruders.',
-    shortDescription: 'Add extra security to hotel rooms.',
-    image: 'https://images.unsplash.com/photo-1558002038-1055907df827?w=400',
-    price: 12.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07PDSPWQ8',
-    category: 'safety',
-    tags: ['alarm', 'security', 'hotel', 'portable'],
-    rating: 4.4,
-    reviewCount: 11000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'business'],
-  },
-
-  // ============ TOILETRIES ============
-  {
-    id: 'tsa-bottles-set',
-    name: 'TSA Approved Bottles Set',
-    description: 'Leak-proof silicone bottles for liquids. Includes labels and clear bag.',
-    shortDescription: 'TSA-compliant bottles for carry-on travel.',
-    image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=400',
-    price: 12.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B078GNQTFK',
-    category: 'toiletries',
-    tags: ['TSA', 'bottles', 'leak-proof', 'carry-on'],
-    rating: 4.5,
-    reviewCount: 33000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'quick-dry-towel',
-    name: 'Microfiber Quick-Dry Towel',
-    description: 'Ultra-absorbent towel that dries 10x faster than cotton. Packs small.',
-    shortDescription: 'Compact towel that dries incredibly fast.',
-    image: 'https://images.unsplash.com/photo-1583845112203-29329902332e?w=400',
-    price: 19.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07BGWDM5R',
-    category: 'toiletries',
-    tags: ['towel', 'quick-dry', 'microfiber', 'compact'],
-    rating: 4.6,
-    reviewCount: 21000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'adventure', 'budget'],
-    activities: ['beach', 'hiking', 'camping', 'gym'],
-  },
-  {
-    id: 'sunscreen-travel-size',
-    name: 'Reef-Safe Sunscreen SPF 50',
-    description: 'Mineral sunscreen safe for coral reefs. Water-resistant for 80 minutes.',
-    shortDescription: 'Protect your skin without harming the ocean.',
-    image: 'https://images.unsplash.com/photo-1556228994-c0a3a7e86bb4?w=400',
-    price: 14.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07NQHWHSR',
-    category: 'toiletries',
-    tags: ['sunscreen', 'reef-safe', 'SPF', 'beach'],
-    rating: 4.5,
-    reviewCount: 16000,
-    budgetTier: 'budget',
-    weatherConditions: ['tropical', 'desert'],
-    destinations: ['hawaii', 'caribbean', 'bali', 'maldives'],
-    activities: ['beach', 'snorkeling', 'swimming'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'insect-repellent-travel',
-    name: 'DEET-Free Insect Repellent',
-    description: 'Picaridin-based bug spray effective against mosquitoes and ticks. TSA-approved size.',
-    shortDescription: 'Keep mosquitoes away naturally.',
-    image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400',
-    price: 11.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B004N59OFU',
-    category: 'toiletries',
-    tags: ['insect-repellent', 'mosquito', 'DEET-free', 'travel-size'],
-    rating: 4.4,
-    reviewCount: 14000,
-    budgetTier: 'budget',
-    weatherConditions: ['tropical'],
-    destinations: ['thailand', 'vietnam', 'costa-rica', 'amazon', 'africa'],
-    activities: ['hiking', 'jungle', 'safari'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
-
-  // ============ ACTIVITY GEAR ============
-  {
-    id: 'dry-bag-waterproof',
-    name: 'Waterproof Dry Bag (20L)',
-    description: 'Roll-top dry bag keeps gear completely dry. Perfect for water activities.',
-    shortDescription: 'Keep electronics and valuables dry.',
-    image: 'https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=400',
-    price: 18.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07BGWDM5R',
-    category: 'activity',
-    tags: ['waterproof', 'dry-bag', 'beach', 'water-sports'],
-    rating: 4.7,
-    reviewCount: 27000,
-    budgetTier: 'budget',
-    activities: ['beach', 'kayaking', 'boating', 'snorkeling'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
-  {
-    id: 'hiking-daypack',
-    name: 'Packable Hiking Daypack',
-    description: 'Lightweight 25L backpack that folds into pocket. Water-resistant with chest strap.',
-    shortDescription: 'Perfect for day hikes and excursions.',
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400',
-    price: 26.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07DLQHFHH',
-    category: 'activity',
-    tags: ['daypack', 'hiking', 'packable', 'lightweight'],
-    rating: 4.6,
-    reviewCount: 31000,
-    budgetTier: 'budget',
-    activities: ['hiking', 'sightseeing', 'day-trips'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
-  {
-    id: 'snorkel-set',
-    name: 'Dry Snorkel Mask Set',
-    description: 'Anti-fog panoramic mask with dry-top snorkel. Includes mesh bag.',
-    shortDescription: 'See underwater clearly with a comfortable fit.',
-    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400',
-    price: 34.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07X6QHCGJ',
-    category: 'activity',
-    tags: ['snorkel', 'mask', 'beach', 'water-sports'],
-    rating: 4.5,
-    reviewCount: 18000,
-    budgetTier: 'mid-range',
-    weatherConditions: ['tropical'],
-    destinations: ['hawaii', 'caribbean', 'maldives', 'thailand', 'bali'],
-    activities: ['snorkeling', 'beach'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'luxury'],
-  },
-  {
-    id: 'trekking-poles-folding',
-    name: 'Folding Trekking Poles',
-    description: 'Carbon fiber poles that fold to 15 inches. Cork handles reduce hand fatigue.',
-    shortDescription: 'Reduce strain on knees during hikes.',
-    image: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=400',
-    price: 59.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07BNDVGL6',
-    category: 'activity',
-    tags: ['trekking-poles', 'hiking', 'folding', 'carbon-fiber'],
-    rating: 4.7,
-    reviewCount: 9500,
-    budgetTier: 'mid-range',
-    activities: ['hiking', 'trekking'],
-    tripTypes: ['solo', 'couple', 'adventure'],
-  },
-
-  // ============ ESSENTIALS ============
-  {
-    id: 'luggage-scale',
-    name: 'Digital Luggage Scale',
-    description: 'Handheld scale weighs up to 110 lbs. Avoid overweight baggage fees.',
-    shortDescription: 'Never pay overweight baggage fees again.',
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400',
-    price: 12.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B00D5FGK5Y',
-    category: 'essentials',
-    tags: ['luggage-scale', 'digital', 'essential'],
-    rating: 4.6,
-    reviewCount: 42000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'travel-pillow-blanket',
-    name: '2-in-1 Travel Pillow & Blanket',
-    description: 'Soft fleece blanket folds into a pillow. Perfect for flights and road trips.',
-    shortDescription: 'Stay cozy on long journeys.',
-    image: 'https://images.unsplash.com/photo-1520923642038-b4259acecbd7?w=400',
-    price: 24.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07H5KTXP7',
-    category: 'essentials',
-    tags: ['pillow', 'blanket', '2-in-1', 'flight'],
-    rating: 4.4,
-    reviewCount: 15000,
-    budgetTier: 'budget',
-    activities: ['flight', 'road-trip'],
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'passport-holder-rfid',
-    name: 'RFID Passport Holder',
-    description: 'Premium leather passport case with RFID blocking. Holds passport, cards, and boarding pass.',
-    shortDescription: 'Keep travel documents secure and organized.',
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400',
-    price: 16.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07BFPW38V',
-    category: 'essentials',
-    tags: ['passport', 'RFID', 'leather', 'organizer'],
-    rating: 4.7,
-    reviewCount: 28000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'luggage-tags-4pack',
-    name: 'Metal Luggage Tags (4-Pack)',
-    description: 'Durable aluminum luggage tags with steel cable attachment. Includes privacy cover.',
-    shortDescription: 'Identify your bags quickly at baggage claim.',
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400',
-    price: 9.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07J2HMG8K',
-    category: 'essentials',
-    tags: ['luggage-tags', 'aluminum', 'durable'],
-    rating: 4.7,
-    reviewCount: 35000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'travel-journal',
-    name: 'Travel Journal with Prompts',
-    description: 'Guided travel journal with prompts for memories, expenses, and bucket lists.',
-    shortDescription: 'Document your adventures for years to come.',
-    image: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=400',
-    price: 14.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07QWLNXC8',
-    category: 'essentials',
-    tags: ['journal', 'travel-diary', 'memories'],
-    rating: 4.8,
-    reviewCount: 12000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'luxury'],
-  },
-
-  // ============ CLOTHING ============
-  {
-    id: 'wrinkle-free-shirt',
-    name: 'Wrinkle-Free Travel Shirt',
-    description: 'Quick-dry, wrinkle-resistant button-down. Looks professional straight from the suitcase.',
-    shortDescription: 'Look sharp without ironing.',
-    image: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=400',
-    price: 49.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07TDHH2WK',
-    category: 'clothing',
-    tags: ['wrinkle-free', 'shirt', 'business', 'quick-dry'],
-    rating: 4.5,
-    reviewCount: 8900,
-    budgetTier: 'mid-range',
-    tripTypes: ['business', 'luxury'],
-  },
-  {
-    id: 'convertible-pants',
-    name: 'Convertible Travel Pants',
-    description: 'Zip-off pants convert to shorts. Water-resistant with multiple pockets.',
-    shortDescription: 'Two pants in one - perfect for changing weather.',
-    image: 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=400',
-    price: 39.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07PLXQWR5',
-    category: 'clothing',
-    tags: ['convertible', 'pants', 'hiking', 'versatile'],
-    rating: 4.4,
-    reviewCount: 14000,
-    budgetTier: 'mid-range',
-    activities: ['hiking', 'sightseeing', 'adventure'],
-    tripTypes: ['solo', 'couple', 'adventure', 'budget'],
-  },
-  {
-    id: 'merino-wool-socks',
-    name: 'Merino Wool Travel Socks (3-Pack)',
-    description: 'Temperature-regulating socks that prevent blisters. Naturally anti-odor.',
-    shortDescription: 'Comfortable socks for all-day walking.',
-    image: 'https://images.unsplash.com/photo-1586350977771-b3b0abd50c82?w=400',
-    price: 29.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07PRJVLDZ',
-    category: 'clothing',
-    tags: ['socks', 'merino', 'anti-odor', 'hiking'],
-    rating: 4.7,
-    reviewCount: 19000,
-    budgetTier: 'mid-range',
-    activities: ['hiking', 'walking', 'sightseeing'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
-
-  // ============ MORE ELECTRONICS ============
-  {
-    id: 'action-camera-gopro',
-    name: 'GoPro HERO12 Black',
-    description: 'Waterproof 5.3K action camera with HyperSmooth stabilization. Perfect for adventures.',
-    shortDescription: 'Capture epic adventures in stunning 5.3K video.',
-    image: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400',
-    price: 399.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B0C8V3LTPT',
-    category: 'electronics',
-    tags: ['camera', 'action-camera', 'waterproof', 'adventure'],
-    rating: 4.7,
-    reviewCount: 12000,
-    budgetTier: 'premium',
-    activities: ['diving', 'skiing', 'surfing', 'hiking', 'adventure'],
-    tripTypes: ['adventure', 'luxury'],
-  },
-  {
-    id: 'kindle-paperwhite',
-    name: 'Kindle Paperwhite (16GB)',
-    description: 'Waterproof e-reader with 6.8" display. Glare-free, even in bright sunlight.',
-    shortDescription: 'Carry thousands of books without the weight.',
-    image: 'https://images.unsplash.com/photo-1592890288564-76628a30a657?w=400',
-    price: 149.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B09TMNTKGL',
-    category: 'electronics',
-    tags: ['e-reader', 'kindle', 'books', 'beach'],
-    rating: 4.8,
-    reviewCount: 95000,
-    budgetTier: 'premium',
-    activities: ['beach', 'relaxation', 'flight'],
-    tripTypes: ['solo', 'couple', 'luxury'],
-  },
-  {
-    id: 'portable-wifi-hotspot',
-    name: 'Portable WiFi Hotspot Device',
-    description: 'Mobile hotspot that works in 140+ countries. Connect up to 10 devices.',
-    shortDescription: 'Stay connected anywhere in the world.',
-    image: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=400',
-    price: 99.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07ZZ8P4P4',
-    category: 'electronics',
-    tags: ['wifi', 'hotspot', 'international', 'connectivity'],
-    rating: 4.3,
-    reviewCount: 8500,
-    budgetTier: 'mid-range',
-    tripTypes: ['solo', 'couple', 'business', 'adventure'],
-  },
-  {
-    id: 'waterproof-phone-pouch',
-    name: 'Waterproof Phone Pouch (2-Pack)',
-    description: 'IPX8 certified waterproof phone case. Works underwater up to 100 feet.',
-    shortDescription: 'Protect your phone at the beach or pool.',
-    image: 'https://images.unsplash.com/photo-1512499617640-c74ae3a79d37?w=400',
-    price: 12.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07JGCGT5Q',
-    category: 'electronics',
-    tags: ['waterproof', 'phone', 'beach', 'pool'],
-    rating: 4.5,
-    reviewCount: 48000,
-    budgetTier: 'budget',
-    weatherConditions: ['tropical'],
-    activities: ['beach', 'pool', 'water-sports', 'snorkeling'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
-  {
-    id: 'travel-router',
-    name: 'Portable Travel Router',
-    description: 'Create secure private WiFi from hotel networks. Share one connection with all devices.',
-    shortDescription: 'Secure hotel WiFi for all your devices.',
-    image: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=400',
-    price: 39.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B073TSK26W',
-    category: 'electronics',
-    tags: ['router', 'wifi', 'security', 'hotel'],
-    rating: 4.4,
-    reviewCount: 7200,
-    budgetTier: 'mid-range',
-    tripTypes: ['business', 'solo', 'couple'],
-  },
-
-  // ============ FAMILY TRAVEL ============
-  {
-    id: 'kids-headphones',
-    name: 'Kids Wireless Headphones',
-    description: 'Volume-limited headphones safe for children. 20-hour battery, foldable design.',
-    shortDescription: 'Keep kids entertained safely on flights.',
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400',
-    price: 29.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B08F5YMYQZ',
-    category: 'electronics',
-    tags: ['headphones', 'kids', 'wireless', 'flight'],
-    rating: 4.6,
-    reviewCount: 24000,
-    budgetTier: 'budget',
-    tripTypes: ['family'],
-  },
-  {
-    id: 'car-seat-travel-bag',
-    name: 'Car Seat Travel Bag',
-    description: 'Padded bag protects car seat during flights. Backpack straps for easy carrying.',
-    shortDescription: 'Protect your car seat while traveling.',
-    image: 'https://images.unsplash.com/photo-1596389662752-3f4e3e47c4a3?w=400',
-    price: 34.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B01B7MF2WY',
-    category: 'essentials',
-    tags: ['car-seat', 'family', 'baby', 'flight'],
-    rating: 4.5,
-    reviewCount: 15000,
-    budgetTier: 'mid-range',
-    tripTypes: ['family'],
-  },
-  {
-    id: 'stroller-travel-bag',
-    name: 'Stroller Travel Bag',
-    description: 'Heavy-duty bag for gate-checking strollers. Water-resistant with wheels.',
-    shortDescription: 'Keep your stroller protected in transit.',
-    image: 'https://images.unsplash.com/photo-1596389662752-3f4e3e47c4a3?w=400',
-    price: 39.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07DH5G7Z8',
-    category: 'essentials',
-    tags: ['stroller', 'family', 'baby', 'flight'],
-    rating: 4.4,
-    reviewCount: 11000,
-    budgetTier: 'mid-range',
-    tripTypes: ['family'],
-  },
-  {
-    id: 'kids-travel-pillow',
-    name: 'Kids Travel Pillow & Blanket Set',
-    description: 'Fun animal-shaped pillow with attached blanket. Perfect for flights and road trips.',
-    shortDescription: 'Keep kids cozy on long journeys.',
-    image: 'https://images.unsplash.com/photo-1520923642038-b4259acecbd7?w=400',
-    price: 24.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07TXVJ5NT',
-    category: 'comfort',
-    tags: ['kids', 'pillow', 'blanket', 'flight'],
-    rating: 4.6,
-    reviewCount: 9500,
-    budgetTier: 'budget',
-    tripTypes: ['family'],
-    activities: ['flight', 'road-trip'],
-  },
-  {
-    id: 'portable-diaper-changing-pad',
-    name: 'Portable Diaper Changing Pad',
-    description: 'Waterproof, foldable changing station. Includes wipes holder and diaper pockets.',
-    shortDescription: 'Change diapers anywhere with ease.',
-    image: 'https://images.unsplash.com/photo-1596389662752-3f4e3e47c4a3?w=400',
-    price: 16.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07S9H3K8L',
-    category: 'essentials',
-    tags: ['diaper', 'baby', 'family', 'portable'],
-    rating: 4.7,
-    reviewCount: 18000,
-    budgetTier: 'budget',
-    tripTypes: ['family'],
-  },
-  {
-    id: 'kids-activity-kit',
-    name: 'Travel Activity Kit for Kids',
-    description: 'Screen-free entertainment with coloring books, games, and puzzles for flights.',
-    shortDescription: 'Keep kids entertained without screens.',
-    image: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=400',
-    price: 19.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B0854HMTTX',
-    category: 'comfort',
-    tags: ['kids', 'activity', 'entertainment', 'flight'],
-    rating: 4.5,
-    reviewCount: 7800,
-    budgetTier: 'budget',
-    tripTypes: ['family'],
-    activities: ['flight', 'road-trip'],
-  },
-
-  // ============ LUXURY TRAVEL ============
-  {
-    id: 'luxury-toiletry-bag',
-    name: 'Leather Toiletry Bag',
-    description: 'Full-grain leather dopp kit with waterproof lining. Timeless design.',
-    shortDescription: 'Travel in style with premium leather.',
-    image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400',
-    price: 89.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07RPJM3VS',
-    category: 'organization',
-    tags: ['leather', 'toiletry', 'luxury', 'premium'],
-    rating: 4.8,
-    reviewCount: 5400,
-    budgetTier: 'premium',
-    tripTypes: ['business', 'luxury'],
-  },
-  {
-    id: 'cashmere-travel-blanket',
-    name: 'Cashmere Travel Blanket',
-    description: '100% cashmere throw with carrying pouch. Ultra-soft and lightweight luxury.',
-    shortDescription: 'Wrap yourself in cashmere comfort.',
-    image: 'https://images.unsplash.com/photo-1520923642038-b4259acecbd7?w=400',
-    price: 199.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B08M9KXMXZ',
-    category: 'comfort',
-    tags: ['cashmere', 'blanket', 'luxury', 'premium'],
-    rating: 4.9,
-    reviewCount: 2800,
-    budgetTier: 'premium',
-    tripTypes: ['business', 'luxury'],
-    activities: ['flight', 'first-class'],
-  },
-  {
-    id: 'premium-luggage-set',
-    name: 'Samsonite Luggage Set (3-Piece)',
-    description: 'Hardside spinner luggage with TSA locks. Includes carry-on, medium, and large.',
-    shortDescription: 'Premium luggage built to last.',
-    image: 'https://images.unsplash.com/photo-1565026057447-bc90a3dceb87?w=400',
-    price: 349.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B08P5HZLDZ',
-    category: 'essentials',
-    tags: ['luggage', 'hardside', 'spinner', 'premium'],
-    rating: 4.7,
-    reviewCount: 11000,
-    budgetTier: 'premium',
-    tripTypes: ['business', 'luxury', 'couple'],
-  },
-  {
-    id: 'bose-qc-headphones',
-    name: 'Bose QuietComfort Headphones',
-    description: 'Industry-leading noise cancellation with 24-hour battery. Premium sound quality.',
-    shortDescription: 'The gold standard in noise canceling.',
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400',
-    price: 349.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B0CCZ1L489',
-    category: 'electronics',
-    tags: ['headphones', 'ANC', 'bose', 'premium'],
-    rating: 4.8,
-    reviewCount: 42000,
-    budgetTier: 'premium',
-    tripTypes: ['business', 'luxury'],
-    activities: ['flight', 'long-haul'],
-  },
-
-  // ============ DESTINATION SPECIFIC ============
-  {
-    id: 'ski-goggles',
-    name: 'Ski Goggles Anti-Fog',
-    description: 'OTG goggles that fit over glasses. UV protection with interchangeable lenses.',
-    shortDescription: 'Clear vision on the slopes in any weather.',
-    image: 'https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=400',
-    price: 59.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07F1HLPSK',
-    category: 'activity',
-    tags: ['skiing', 'goggles', 'snow', 'winter'],
-    rating: 4.6,
-    reviewCount: 8700,
-    budgetTier: 'mid-range',
-    weatherConditions: ['cold'],
-    destinations: ['aspen', 'switzerland', 'japan', 'colorado', 'alps'],
-    activities: ['skiing', 'snowboarding', 'winter-sports'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure'],
-  },
-  {
-    id: 'hand-warmers',
-    name: 'Hand Warmers (40-Pack)',
-    description: 'Air-activated warmers last up to 10 hours. Perfect for cold weather adventures.',
-    shortDescription: 'Stay warm in freezing temperatures.',
-    image: 'https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=400',
-    price: 19.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07VLDMM2T',
-    category: 'weather',
-    tags: ['hand-warmers', 'cold', 'winter', 'heat'],
-    rating: 4.7,
-    reviewCount: 32000,
-    budgetTier: 'budget',
-    weatherConditions: ['cold'],
-    destinations: ['iceland', 'norway', 'alaska', 'canada', 'alps'],
-    activities: ['skiing', 'hiking', 'winter-sports'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
-  {
-    id: 'beach-tent',
-    name: 'Pop-Up Beach Tent UPF 50+',
-    description: 'Easy setup beach tent provides shade for 2-3 people. Includes sand pockets.',
-    shortDescription: 'Instant shade at the beach.',
-    image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400',
-    price: 39.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07D4DGW2F',
-    category: 'activity',
-    tags: ['beach', 'tent', 'UPF', 'shade'],
-    rating: 4.5,
-    reviewCount: 21000,
-    budgetTier: 'mid-range',
-    weatherConditions: ['tropical', 'desert'],
-    destinations: ['hawaii', 'caribbean', 'mexico', 'florida', 'california'],
-    activities: ['beach'],
-    tripTypes: ['family', 'couple'],
-  },
-  {
-    id: 'reef-shoes',
-    name: 'Water Shoes Quick-Dry',
-    description: 'Breathable water shoes protect feet from rocks and coral. Drain holes for quick drying.',
-    shortDescription: 'Protect your feet in and out of water.',
-    image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400',
-    price: 24.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07K1ZHLS9',
-    category: 'activity',
-    tags: ['water-shoes', 'beach', 'quick-dry', 'reef'],
-    rating: 4.4,
-    reviewCount: 28000,
-    budgetTier: 'budget',
-    weatherConditions: ['tropical'],
-    destinations: ['hawaii', 'caribbean', 'bali', 'thailand', 'maldives'],
-    activities: ['beach', 'snorkeling', 'kayaking'],
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
-  {
-    id: 'mosquito-net-tent',
-    name: 'Portable Mosquito Net',
-    description: 'Lightweight pop-up mosquito net for beds. Essential for tropical destinations.',
-    shortDescription: 'Sleep peacefully in mosquito-heavy areas.',
-    image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400',
-    price: 22.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07W71ZD1X',
-    category: 'safety',
-    tags: ['mosquito', 'net', 'tropical', 'sleep'],
-    rating: 4.3,
-    reviewCount: 6500,
-    budgetTier: 'budget',
-    weatherConditions: ['tropical'],
-    destinations: ['thailand', 'vietnam', 'bali', 'costa-rica', 'africa'],
-    activities: ['camping', 'budget-travel'],
-    tripTypes: ['solo', 'couple', 'adventure', 'budget'],
-  },
-  {
-    id: 'altitude-pills',
-    name: 'Altitude Adjustment Supplement',
-    description: 'Natural supplement helps prevent altitude sickness. Start before arriving at elevation.',
-    shortDescription: 'Adjust to high altitude faster.',
-    image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400',
-    price: 29.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07ZYJNJ2X',
-    category: 'safety',
-    tags: ['altitude', 'supplement', 'mountains', 'health'],
-    rating: 4.4,
-    reviewCount: 4200,
-    budgetTier: 'mid-range',
-    destinations: ['peru', 'bolivia', 'colorado', 'nepal', 'tibet'],
-    activities: ['hiking', 'trekking', 'mountaineering'],
-    tripTypes: ['adventure'],
-  },
-  {
-    id: 'language-translator',
-    name: 'Instant Language Translator',
-    description: 'Pocket device translates 40+ languages in real-time. Works offline.',
-    shortDescription: 'Break language barriers instantly.',
-    image: 'https://images.unsplash.com/photo-1512428559087-560fa5ceab42?w=400',
-    price: 129.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07TH6WKJM',
-    category: 'electronics',
-    tags: ['translator', 'language', 'international'],
-    rating: 4.2,
-    reviewCount: 5800,
-    budgetTier: 'premium',
-    destinations: ['japan', 'china', 'korea', 'europe'],
-    tripTypes: ['solo', 'couple', 'business'],
-  },
-
-  // ============ MORE TOILETRIES ============
-  {
-    id: 'solid-shampoo-bar',
-    name: 'Solid Shampoo Bar Set',
-    description: 'TSA-friendly solid shampoo and conditioner bars. Equivalent to 3 bottles each.',
-    shortDescription: 'No liquids to worry about through security.',
-    image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=400',
-    price: 18.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07QHGFTQN',
-    category: 'toiletries',
-    tags: ['shampoo', 'solid', 'TSA', 'eco-friendly'],
-    rating: 4.5,
-    reviewCount: 11000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'adventure', 'budget'],
-  },
-  {
-    id: 'toothbrush-travel-kit',
-    name: 'Electric Toothbrush Travel Case',
-    description: 'Compact travel case with built-in sanitizer. Fits most electric toothbrush heads.',
-    shortDescription: 'Keep your toothbrush clean while traveling.',
-    image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=400',
-    price: 14.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07XLPZ5LT',
-    category: 'toiletries',
-    tags: ['toothbrush', 'sanitizer', 'hygiene'],
-    rating: 4.4,
-    reviewCount: 8200,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'travel-mirror-lighted',
-    name: 'Compact Lighted Travel Mirror',
-    description: 'LED makeup mirror with 10x magnification. USB rechargeable.',
-    shortDescription: 'Perfect lighting anywhere you go.',
-    image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400',
-    price: 19.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07XLNTH6V',
-    category: 'toiletries',
-    tags: ['mirror', 'makeup', 'LED', 'compact'],
-    rating: 4.6,
-    reviewCount: 14000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'business', 'luxury'],
-  },
-
-  // ============ MORE ORGANIZATION ============
-  {
-    id: 'electronics-organizer',
-    name: 'Electronics Organizer Bag',
-    description: 'Double-layer organizer for cables, chargers, power banks. Water-resistant.',
-    shortDescription: 'Keep all your tech gear organized.',
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400',
-    price: 21.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07FZQKX5K',
-    category: 'organization',
-    tags: ['electronics', 'organizer', 'cables', 'tech'],
-    rating: 4.7,
-    reviewCount: 38000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'business', 'adventure', 'luxury', 'budget'],
-  },
-  {
-    id: 'jewelry-roll-travel',
-    name: 'Travel Jewelry Roll Organizer',
-    description: 'Soft velvet roll-up case protects jewelry. Multiple compartments and ring bar.',
-    shortDescription: 'Keep jewelry tangle-free and protected.',
-    image: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400',
-    price: 16.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07YBQVNL4',
-    category: 'organization',
-    tags: ['jewelry', 'organizer', 'velvet', 'protection'],
-    rating: 4.6,
-    reviewCount: 9800,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'business', 'luxury'],
-  },
-  {
-    id: 'compression-bags-vacuum',
-    name: 'Vacuum Compression Bags (10-Pack)',
-    description: 'No pump needed - roll to compress. Save 80% space in luggage.',
-    shortDescription: 'Maximum space savings with no pump.',
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400',
-    price: 17.99,
-    affiliateUrl: 'https://www.amazon.com/dp/B07FZXGZQK',
-    category: 'organization',
-    tags: ['compression', 'vacuum', 'space-saving'],
-    rating: 4.4,
-    reviewCount: 29000,
-    budgetTier: 'budget',
-    tripTypes: ['solo', 'couple', 'family', 'adventure', 'budget'],
-  },
+    "id": "B0CVZWMD34",
+    "name": "Kitsch Continuous Spray Bottle for Hair â€“ Fine Mist Water Mister & Water Spray Bottle â€“ Recycled Hair Spray Bottle â€“ Spray Bottles for Cleaning, Styling, Plants & More â€“ Terracotta, 150ml",
+    "description": "About this item ULTRA-FINE MIST FOR EFFORTLESS HAIR STYLING: Experience smooth, clog-free spraying with this continuous spray bottle that delivers an even, ultra-fine mistâ€”perfect for refreshing curls, waves, and prepping hair without drenching. Ideal for daily styling, second-day curls, or plopping routines. MULTI-USE MISTER FOR HAIR, PLANTS, & MORE: More than just a hair spray bottleâ€”this versatile spray bottle works great for facial toners, alcohol-based solutions, light cleaners, or plant misting. Refillable and easy to clean for all-around home and beauty use. ERGONOMIC, EASY-TO-USE TRIGGER: Designed with a comfort-fit shape and smooth trigger action, this mister spray bottle reduces hand fatigue during useâ€”ideal for prolonged hairstyling sessions or daily refreshes without hassle. ECO-FRIENDLY & TRAVEL-READY DESIGN: Crafted from recycled materials, this 150ml water spray bottle is a sustainable, reusable alternative to single-use plastics. Lightweight and compact, it's the perfect travel spray bottle for hair, skincare, or quick cleanups on the go. REFILLABLE, NOT FOR THICK OR OILY LIQUIDS: Best used with lightweight, water-based liquids. Avoid thick or oily products to maintain optimal spray performance and prevent clogging. Keeps contents fresh with minimal risk of contamination from standing water. PERFECT HOLIDAY GIFTS FOR WOMEN â€“ Whether you're searching for gifts for women, white elephant gifts for adults, teen girl gifts trendy stuff, or thoughtful self care gifts for women, this spray bottle makes a versatile choice. Great as gifts for mom, valentines day gifts, or gifts for teen girls, and fits right in with fun white elephant gifts or practical stocking stuffers. â€º See more product details",
+    "shortDescription": "Perfect travel toiletries for your next trip.",
+    "image": "https://m.media-amazon.com/images/I/51u3yqZIjWL._AC_SL1250_.jpg",
+    "price": 6.99,
+    "affiliateUrl": "https://www.amazon.com/Kitsch-Spray-Bottle-Hair-Hairstyling/dp/B0CVZWMD34?th=1&psc=1&language=en_US&currency=USD",
+    "category": "toiletries",
+    "tags": [
+      "toiletries",
+      "travel",
+      "compact",
+      "lightweight",
+      "reusable",
+      "refillable",
+      "eco-friendly",
+      "versatile",
+      "multi-use",
+      "ergonomic"
+    ],
+    "budgetTier": "budget",
+    "rating": 4.1,
+    "reviewCount": 8573,
+    "weatherConditions": [
+      "cold"
+    ],
+    "tripTypes": [
+      "business",
+      "solo"
+    ],
+    "activities": [
+      "camping"
+    ]
+  },
+  {
+    "id": "B0C6X2VP9R",
+    "name": "Waterproof Travel Drawstring Shoe Bags for Packing, Storage, Travel Essentials for Men and Women, 15.7 x 11.8 inches, Clear, 5 pieces",
+    "description": "Suitable Size: 15.7 x 11.8 inches; The package includes 5 pack of shoe bags; Ideal size for women and men; Great for packing dance shoes, sneakers, hiking golf shoes, clothes, and other travel items; Works well as a home and travel storage bag Multi-Function: Not just as a travel shoe bag, it also can be used as a traveling storage bag, toiletry bag, packing bag, gym bag, laundry bag travel; If there is any problem with the shoe bags, please let us know, and we will reply to you in time Premium Material: The travel shoe bag is made of premium PE, waterproof, and reusable; With thick drawstrings for easy hanging and quick organization; A good helper for home and travel use Thoughtful Design: The translucent design of the shoe bags for travel helps you easily identify what's inside without opening it; Save your time and protects your privacy; Convenient for your travel and life Must-have for Travel & Daily Use: These shoe bags for travel can protect your items against scuffs and dirt, help you pack luggage conveniently and quickly, and keep your shoes well organized and dust-free; Making your trip and daily convenient and neat â€º See more product details",
+    "shortDescription": "Perfect travel organization for your next trip.",
+    "image": "https://m.media-amazon.com/images/I/616K24V+mkL._AC_SL1500_.jpg",
+    "price": 5.99,
+    "affiliateUrl": "https://www.amazon.com/COIDEA-Drawstring-Waterproof-Dustproof-Portable/dp/B0C6X2VP9R?th=1&psc=1&language=en_US&currency=USD",
+    "category": "organization",
+    "tags": [
+      "organization",
+      "travel",
+      "waterproof",
+      "reusable"
+    ],
+    "budgetTier": "budget",
+    "rating": 4.5,
+    "reviewCount": 4337,
+    "weatherConditions": [
+      "rainy",
+      "desert"
+    ],
+    "tripTypes": [
+      "business",
+      "luxury",
+      "adventure"
+    ],
+    "activities": [
+      "hiking"
+    ]
+  },
+  {
+    "id": "B0DNTLFHZK",
+    "name": "Secret Clinical Strength Antiperspirant Deodorant for Women, 3X Stress Protection, 72hr Sweat & Odor Protection, PH Balancing Minerals, Invisible Solid, Completely Clean Scent, 0.5 oz",
+    "description": "Secret Clinical Strength Antiperspirant and Deodorant for Women is clinically proven protection for 3 types of sweat; 1) stress sweat, 2) heat sweat and 3) activity sweat. This invisible solid gives you 72-hour sweat and odor protection, you can confidently go about your day, knowing you're safeguarded against sweat and odor, no matter the circumstance",
+    "shortDescription": "Secret Clinical Strength Antiperspirant and Deodorant for Women is clinically proven protection for 3 types of sweat; 1) stress sweat, 2) heat sweat and 3) activity sweat.",
+    "image": "https://m.media-amazon.com/images/I/71Q3c5-B0PL._SL1500_.jpg",
+    "price": 2.76,
+    "affiliateUrl": "https://www.amazon.com/Secret-Antiperspirant-Deodorant-Protection-Completely/dp/B0DNTLFHZK?th=1&psc=1&language=en_US&currency=USD",
+    "category": "toiletries",
+    "tags": [
+      "toiletries"
+    ],
+    "budgetTier": "budget",
+    "rating": 4.6,
+    "reviewCount": 1001,
+    "weatherConditions": [
+      "tropical"
+    ]
+  },
+  {
+    "id": "B00AL14WES",
+    "name": "Plackers Micro Mint Dental Flossers, Travel Pack, Perfect Travel Size, Easy Storage, Dental Care On-The-Go, Fresh Mint Flavor, 12 Count",
+    "description": "You've got smiles for miles. Keep it looking fresh with Plackers Micro Mint Flossers. Easily remove food particles with smooth Super Tufffloss, engineered not to stretch, shred or break and with a built-in fold-out toothpick that folds away after use. The easy grip handle provides more control and comfort while cleaning between your teeth and gums. Rely on Plackers to Get the Gunk Out. Enjoy fresh breath with delicious mint flavor that leaves your mouth with a fresh clean feeling. These flossers come in convenient, on-the-go packs and are perfect for travel. Includes 12 mint dental flossers. Smile Like Everyone's Watching!",
+    "shortDescription": "You've got smiles for miles.",
+    "image": "https://m.media-amazon.com/images/I/71IVNlezlUL._AC_SL1500_.jpg",
+    "price": 3.37,
+    "affiliateUrl": "https://www.amazon.com/Plackers-Micro-Dental-Floss-Travel/dp/B00AL14WES?th=1&psc=1&language=en_US&currency=USD",
+    "category": "clothing",
+    "tags": [
+      "clothing",
+      "travel"
+    ],
+    "budgetTier": "budget",
+    "rating": 4.7,
+    "reviewCount": 23986
+  },
+  {
+    "id": "B07H45NFBF",
+    "name": "Wet Brush Mini Detangler Hair Brush, Pink, Detangling Travel Hairbrush, Ultra-Soft IntelliFlex Bristles Glide Through Tangles with Ease, Pain-Free, All Hair Types",
+    "description": "Meet The Mini Detangler An on-the-go brush that helps hair stay strong and healthy! The Mini Detangler gently loosens knots, on wet or dry hair, without pulling or snagging. The moment you use it, you'll feel the difference, and never want to try another hairbrush again.",
+    "shortDescription": "Meet The Mini Detangler An on-the-go brush that helps hair stay strong and healthy.",
+    "image": "https://m.media-amazon.com/images/I/715wdpFqSPL._SL1500_.jpg",
+    "price": 4.99,
+    "affiliateUrl": "https://www.amazon.com/Wet-Brush-Detangler-pink-mini/dp/B07H45NFBF?th=1&psc=1&language=en_US&currency=USD",
+    "category": "clothing",
+    "tags": [
+      "clothing",
+      "travel"
+    ],
+    "budgetTier": "budget",
+    "rating": 4.8,
+    "reviewCount": 14466,
+    "weatherConditions": [
+      "rainy",
+      "desert"
+    ]
+  },
+  {
+    "id": "B013FEIAVS",
+    "name": "L'OCCITANE Cleansing & Softening Almond Shower Oil, Body Wash & Shaving Base Purifies & Smooths Without Drying Skin, Milky Lather, Nourishing Skincare",
+    "description": "L'OCCITANE Cleansing & Softening Almond Shower Oil, Body Wash & Shaving Base Purifies & Smooths Without Drying Skin, Milky Lather, Nourishing Skincare",
+    "shortDescription": "Perfect travel toiletries for your next trip.",
+    "image": "https://m.media-amazon.com/images/I/419Tiq5IWUL._SL1200_.jpg",
+    "price": 12,
+    "affiliateUrl": "https://www.amazon.com/LOccitane-Cleansing-Softening-Almond-Shower/dp/B013FEIAVS?th=1&psc=1&language=en_US&currency=USD",
+    "category": "toiletries",
+    "tags": [
+      "toiletries"
+    ],
+    "budgetTier": "budget",
+    "rating": 4.4,
+    "reviewCount": 15480,
+    "weatherConditions": [
+      "desert"
+    ]
+  },
+  {
+    "id": "B01M9F9JYH",
+    "name": "Garnier Micellar Cleansing Water, All-in-1 Makeup Remover and Facial Cleanser, For All Skin Types, 3.4 Fl Oz (100mL), 1 Count (Packaging May Vary)",
+    "description": "This All-in-1 Micellar Cleansing Water is surprisingly powerful yet gentle to skin. It effectively removes makeup, cleanses and refreshes skin. A multi-purpose cleanser that contains Micellar technology. Like a magnet, micelles capture and lift away dirt, oil and makeup without harsh rubbing, leaving skin perfectly clean, hydrated and refreshed without over-drying. â€¢ All-in-1 cleanser and makeup remover cleanses, removes makeup and refreshes skin â€¢ Oil-Free, Alcohol-Free, Fragrance-Free â€¢ Micelle Technology attracts dirt, oil and makeup like a magnet without harsh rubbing â€¢ All skin types, even sensitive TO REMOVE EYE MAKEUP: Hold pad over closed eyes for a few seconds, then gently wipe without harsh rubbing. TO CLEAN SKIN & REMOVE FACE MAKEUP: Gently wipe all over until skin is completely clean from makeup and impurities. Use daily, AM/PM. No need to rinse. Avoid contact with eyes. If contact occurs, rinse thoroughly with water.",
+    "shortDescription": "This All-in-1 Micellar Cleansing Water is surprisingly powerful yet gentle to skin.",
+    "image": "https://m.media-amazon.com/images/I/71oehMQkl4L._SL1500_.jpg",
+    "price": 3.82,
+    "affiliateUrl": "https://www.amazon.com/Garnier-SkinActive-Micellar-Cleansing-Water/dp/B01M9F9JYH?th=1&psc=1&language=en_US&currency=USD",
+    "category": "toiletries",
+    "tags": [
+      "toiletries"
+    ],
+    "budgetTier": "budget",
+    "rating": 4.7,
+    "reviewCount": 70045,
+    "weatherConditions": [
+      "cold",
+      "desert"
+    ]
+  },
+  {
+    "id": "B007BF7BUY",
+    "name": "Dramamine Motion Sickness Less Drowsy, Travel Vial, Multicolor, 8 Count",
+    "description": "Dramamine All Day Less Drowsy Motion Sickness Relief prevents and treats motion sickness, nausea, vomiting and dizziness for up to 24 hours. The tablets come in a convenient, safety Travel Vial for anytime motion sickness symptoms strike. Get less drowsy relief from motion sickness when you need it most from the number 1 pharmacist-recommended brand!* Wherever your adventure takes you, Dramamine is a vacation essential in your travel medicine bag. Don't let motion sickness affect your plans on your next cruise, theme park, visit or road trip. Dramamine fits with your other travel size toiletries and travel must haves. If you know you are going on an adventure that is likely to cause motion sickness and nausea, take Dramamine Less Drowsy BEFORE the trek. Also, be sure to drink plenty of water and avoid alcohol, which can increase dehydration and nausea. Take Dramamine and Take Control. For adults and children 6 and older. See packaging for dosing instructions and warnings. *Named by Pharmacy Times and U.S. News & World Report as number 1 Pharmacist-Recommended Brand for 2022 Motion Sickness Remedies Category.",
+    "shortDescription": "Dramamine All Day Less Drowsy Motion Sickness Relief prevents and treats motion sickness, nausea, vomiting and dizziness for up to 24 hours.",
+    "image": "https://m.media-amazon.com/images/I/71zyl5Ql0UL._AC_SL1500_.jpg",
+    "price": 2.99,
+    "affiliateUrl": "https://www.amazon.com/Dramamine-Motion-Sickness-Drowsey-Formula/dp/B007BF7BUY?th=1&psc=1&language=en_US&currency=USD",
+    "category": "safety",
+    "tags": [
+      "safety",
+      "travel"
+    ],
+    "budgetTier": "budget",
+    "rating": 4.8,
+    "reviewCount": 24638,
+    "tripTypes": [
+      "family",
+      "adventure"
+    ]
+  },
+  {
+    "id": "B0B3SCM1L6",
+    "name": "Tower 28 SOS Daily Rescue Facial Spray for Sensitive Skin, Hypochlorous Acid Spray Helps Visibly Reduce the Appearance of Redness and Breakouts, Travel Size Toner for Face, 1 FL Oz",
+    "description": "About this item THE ORIGINAL HYPOCHLOROUS ACID FACIAL SPRAY: This formula, known as Tower 28 SOS Facial Spray, is backed by clinical research and dermatologist testing, helping reduce the appearance of breakouts, calm visible irritation, and soothe redness PURE + pH BALANCED: Our original, proprietary formula is 4.5 pH-balanced and designed for daily useâ€”even on sensitive skin. This daily skincare mist delivers HOCL in a skin-friendly form, with a one-step application that fits easily into any routine RESULTS YOU CAN NOTICE OVER TIME: In clinical research, the spray was shown to help reduce visible redness and support clearer-looking skin with consistent use TRUSTED FORMULA: Backed by 10+ years of research in skin care â€“ this hypochlorous acid spray is recognized by three leading U.S. skin health organizations: the National Eczema Association (NEA), American Rosacea Society (ARS), and National Psoriasis Foundation (NPF). Formulated specifically for facial use to deliver effective results with minimal irritation. Dermatologist-tested, non-toxic, vegan & cruelty-free EASY-TO-USE MIST: Use after cleansing instead of toner, over makeup to refresh, post-workout, post-sun, or on blemish-prone areas. Lightweight, no-sting, residue-free, fragrance-free. Great for travel & gym bags â€º See more product details",
+    "shortDescription": "Perfect travel toiletries for your next trip.",
+    "image": "https://m.media-amazon.com/images/I/61UbAbIiJeL._SL1500_.jpg",
+    "price": 12,
+    "affiliateUrl": "https://www.amazon.com/Tower-28-Beauty-Rescue-Facial/dp/B0B3SCM1L6?th=1&psc=1&language=en_US&currency=USD",
+    "category": "toiletries",
+    "tags": [
+      "toiletries",
+      "travel",
+      "lightweight"
+    ],
+    "budgetTier": "budget",
+    "rating": 4.5,
+    "reviewCount": 3866,
+    "weatherConditions": [
+      "tropical",
+      "cold"
+    ],
+    "tripTypes": [
+      "business"
+    ],
+    "activities": [
+      "camping"
+    ]
+  }
 ];
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
 
 /**
  * Get all products
@@ -1066,60 +297,85 @@ export function getAllProducts(): Product[] {
  * Get product by ID
  */
 export function getProductById(id: string): Product | undefined {
-  return PRODUCTS.find((p) => p.id === id);
+  return PRODUCTS.find(p => p.id === id);
 }
 
 /**
  * Get products by category
  */
-export function getProductsByCategory(category: string): Product[] {
-  return PRODUCTS.filter((p) => p.category === category);
+export function getProductsByCategory(category: ProductCategory): Product[] {
+  return PRODUCTS.filter(p => p.category === category);
 }
 
 /**
  * Get products by budget tier
  */
-export function getProductsByBudget(tier: string): Product[] {
-  return PRODUCTS.filter((p) => p.budgetTier === tier);
+export function getProductsByBudgetTier(tier: 'budget' | 'mid-range' | 'premium'): Product[] {
+  return PRODUCTS.filter(p => p.budgetTier === tier);
 }
 
 /**
- * Search products by name or tags
+ * Search products by query
  */
 export function searchProducts(query: string): Product[] {
   const lowerQuery = query.toLowerCase();
-  return PRODUCTS.filter(
-    (p) =>
-      p.name.toLowerCase().includes(lowerQuery) ||
-      p.description.toLowerCase().includes(lowerQuery) ||
-      p.tags.some((tag) => tag.toLowerCase().includes(lowerQuery))
+  return PRODUCTS.filter(p =>
+    p.name.toLowerCase().includes(lowerQuery) ||
+    p.description.toLowerCase().includes(lowerQuery) ||
+    p.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
   );
 }
 
 /**
- * Get products relevant to weather condition
+ * Get products by price range
  */
-export function getProductsForWeather(condition: string): Product[] {
-  return PRODUCTS.filter(
-    (p) => p.weatherConditions?.some((w) => w.toLowerCase() === condition.toLowerCase())
+export function getProductsByPriceRange(min: number, max: number): Product[] {
+  return PRODUCTS.filter(p => p.price >= min && p.price <= max);
+}
+
+/**
+ * Get top rated products
+ */
+export function getTopRatedProducts(limit: number = 10): Product[] {
+  return PRODUCTS
+    .filter(p => p.rating)
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    .slice(0, limit);
+}
+
+/**
+ * Get products with most reviews
+ */
+export function getMostReviewedProducts(limit: number = 10): Product[] {
+  return PRODUCTS
+    .filter(p => p.reviewCount)
+    .sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0))
+    .slice(0, limit);
+}
+
+/**
+ * Get products by weather conditions
+ */
+export function getProductsForWeather(weatherCondition: string): Product[] {
+  return PRODUCTS.filter(p =>
+    p.weatherConditions?.some(wc => wc.toLowerCase() === weatherCondition.toLowerCase())
   );
 }
 
 /**
- * Get products relevant to activities
+ * Get products by activity
  */
 export function getProductsForActivity(activity: string): Product[] {
-  return PRODUCTS.filter(
-    (p) => p.activities?.some((a) => a.toLowerCase() === activity.toLowerCase())
+  return PRODUCTS.filter(p =>
+    p.activities?.some(a => a.toLowerCase() === activity.toLowerCase())
   );
 }
 
 /**
- * Get products for a specific destination
+ * Get products by destination
  */
 export function getProductsForDestination(destination: string): Product[] {
-  const lowerDest = destination.toLowerCase();
-  return PRODUCTS.filter(
-    (p) => p.destinations?.some((d) => lowerDest.includes(d.toLowerCase()))
+  return PRODUCTS.filter(p =>
+    p.destinations?.some(d => d.toLowerCase().includes(destination.toLowerCase()))
   );
 }

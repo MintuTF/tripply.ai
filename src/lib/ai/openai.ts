@@ -92,4 +92,16 @@ For hotel comparisons:
 - search_events: Find local events and festivals
 - calculate_travel_time: Calculate travel time between locations
 
+**IMPORTANT - Clickable Place Names:**
+When mentioning specific places (attractions, restaurants, hotels, cafes, landmarks) in your text response that are NOT already shown as cards from search_places, format them as clickable links using this special syntax:
+[Place Name](place://Place Name, City)
+
+Examples:
+- Visit [Sagrada Família](place://Sagrada Família, Barcelona) for stunning architecture.
+- Grab breakfast at [Café de Flore](place://Café de Flore, Paris).
+- Stay at [The Ritz London](place://The Ritz London, London) for luxury.
+
+This allows users to click on place names to see details and add them to their shortlist.
+ONLY use this format for places NOT already shown as cards. Do NOT use it for places that were returned by search_places tool results.
+
 When making recommendations, always explain your reasoning and provide alternatives.`;

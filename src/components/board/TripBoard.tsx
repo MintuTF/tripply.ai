@@ -11,8 +11,10 @@ import { BudgetWidget } from '@/components/budget/BudgetWidget';
 import { BudgetBreakdown } from '@/components/budget/BudgetBreakdown';
 import { ResultCard } from '@/components/cards/ResultCard';
 import { cn } from '@/lib/utils';
-import { Search, Grid, List, LayoutGrid, Calendar, Wallet, Hotel, Utensils, Compass, Sparkles } from 'lucide-react';
+import { Search, Grid, List, LayoutGrid, Calendar, Wallet, Hotel, Utensils, Compass, Sparkles, Plus } from 'lucide-react';
 import { TripInfoHeader } from '@/components/trip/TripInfoHeader';
+import { PlaceSearchModal } from '@/components/search/PlaceSearchModal';
+import type { PlaceResult } from '@/types';
 import {
   DndContext,
   DragOverlay,
@@ -57,6 +59,9 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
   // Ask AI modal state
   const [showAskAI, setShowAskAI] = useState(false);
 
+  // Place search modal state
+  const [showPlaceSearch, setShowPlaceSearch] = useState(false);
+
   // Keep selectedCard in sync with cards prop when card data changes
   useEffect(() => {
     if (selectedCard) {
@@ -80,18 +85,18 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
     useSensor(KeyboardSensor)
   );
 
-  // Define board columns (for legacy kanban view)
+  // Define board columns (unified purple/pink theme)
   const columns = [
-    { id: 'considering', label: 'Considering', color: 'blue' },
-    { id: 'shortlist', label: 'Shortlist', color: 'purple' },
-    { id: 'confirmed', label: 'Confirmed', color: 'green' },
+    { id: 'considering', label: 'Considering', color: 'purple' },
+    { id: 'shortlist', label: 'Shortlist', color: 'pink' },
+    { id: 'confirmed', label: 'Confirmed', color: 'gradient' },
   ];
 
-  // Define vertical category sections (new auto-organized view)
+  // Define vertical category sections (purple/pink theme)
   const categories = [
-    { id: 'hotel' as CardType, label: 'Hotels', icon: Hotel, color: 'blue', gradient: 'from-blue-500/10 to-blue-600/5' },
-    { id: 'food' as CardType, label: 'Restaurants', icon: Utensils, color: 'orange', gradient: 'from-orange-500/10 to-orange-600/5' },
-    { id: 'spot' as CardType, label: 'Things to Do', icon: Compass, color: 'purple', gradient: 'from-purple-500/10 to-purple-600/5' },
+    { id: 'hotel' as CardType, label: 'Hotels', icon: Hotel, color: 'purple', gradient: 'from-purple-500/10 to-purple-600/5' },
+    { id: 'food' as CardType, label: 'Restaurants', icon: Utensils, color: 'pink', gradient: 'from-pink-500/10 to-pink-600/5' },
+    { id: 'spot' as CardType, label: 'Things to Do', icon: Compass, color: 'violet', gradient: 'from-violet-500/10 to-violet-600/5' },
   ];
 
   // Filter and organize cards
@@ -173,8 +178,7 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
   const handleDayAssignment = (cardId: string, day: number, timeSlot?: string) => {
     const card = cards.find(c => c.id === cardId);
     if (card && onCardUpdate) {
-      onCardUpdate({
-        ...card,
+      onCardUpdate(cardId, {
         day,
         time_slot: timeSlot,
         // Auto-set order as last in that day
@@ -244,8 +248,7 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
         // Calculate order based on existing cards in that day
         const cardsInDay = cards.filter(c => c.day === newDay && (c.labels || []).includes('confirmed'));
 
-        onCardUpdate({
-          ...draggedCard,
+        onCardUpdate(draggedCard.id, {
           day: newDay,
           labels: newLabels,
           order: cardsInDay.length,
@@ -291,7 +294,7 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
           // Update order for all cards in this category
           reorderedCards.forEach((card, index) => {
             if (onCardUpdate) {
-              onCardUpdate({ ...card, order: index });
+              onCardUpdate(card.id, { order: index });
             }
           });
         }
@@ -326,13 +329,13 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
       }
 
       if (onCardUpdate) {
-        onCardUpdate({ ...draggedCard, labels: newLabels, order: newOrder });
+        onCardUpdate(draggedCard.id, { labels: newLabels, order: newOrder });
 
         // Reorder remaining cards in target column if dropped in middle
         if (newOrder < targetColumnCards.length) {
           targetColumnCards.forEach((card, index) => {
             if (index >= newOrder) {
-              onCardUpdate({ ...card, order: index + 1 });
+              onCardUpdate(card.id, { order: index + 1 });
             }
           });
         }
@@ -397,7 +400,7 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
   };
 
   return (
-    <div className="flex h-full flex-col gradient-mesh">
+    <div className="flex h-full flex-col travel-gradient">
       {/* Trip Info Header */}
       <TripInfoHeader
         trip={trip}
@@ -408,34 +411,43 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
       />
 
       {/* Board Controls Header */}
-      <div className="border-b border-border/50 bg-background px-6 py-3 shadow-sm">
+      <div className="border-b border-purple-100/50 bg-white/80 backdrop-blur-md px-6 py-3 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <span className="rounded-full gradient-primary px-4 py-1.5 text-sm font-semibold text-white shadow-lg">
+            <span className="rounded-full bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-1.5 text-sm font-semibold text-white shadow-lg shadow-purple-200">
               {filteredCards.length} cards
             </span>
+
+            {/* Add Place Button */}
+            <button
+              onClick={() => setShowPlaceSearch(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border-2 border-purple-200 text-purple-600 font-medium hover:border-purple-300 hover:shadow-lg hover:shadow-purple-100 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Place</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-purple-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search cards..."
-                className="h-10 w-64 rounded-xl border-2 border-border/50 bg-card/50 backdrop-blur-sm pl-10 pr-4 text-sm transition-all duration-300 focus-visible:outline-none focus-visible:border-primary focus-visible:shadow-glow"
+                className="h-10 w-64 rounded-xl border border-purple-100 bg-white/60 backdrop-blur-sm pl-10 pr-4 text-sm transition-all duration-300 focus-visible:outline-none focus-visible:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-200"
               />
             </div>
 
-            {/* View Mode */}
-            <div className="flex rounded-xl border-2 border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+            {/* View Mode - Hidden */}
+            <div className="hidden flex rounded-xl border border-purple-100 bg-white/60 backdrop-blur-sm overflow-hidden">
               <button
                 onClick={() => setViewMode('kanban')}
                 className={cn(
                   'px-3 py-2 transition-all duration-300',
-                  viewMode === 'kanban' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
+                  viewMode === 'kanban' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
                 )}
                 title="Kanban View"
               >
@@ -444,8 +456,8 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
               <button
                 onClick={() => setViewMode('itinerary')}
                 className={cn(
-                  'border-x-2 border-border/50 px-3 py-2 transition-all duration-300',
-                  viewMode === 'itinerary' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
+                  'border-x border-purple-100 px-3 py-2 transition-all duration-300',
+                  viewMode === 'itinerary' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
                 )}
                 title="Itinerary View"
               >
@@ -454,8 +466,8 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
               <button
                 onClick={() => setViewMode('budget')}
                 className={cn(
-                  'border-r-2 border-border/50 px-3 py-2 transition-all duration-300',
-                  viewMode === 'budget' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
+                  'border-r border-purple-100 px-3 py-2 transition-all duration-300',
+                  viewMode === 'budget' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
                 )}
                 title="Budget View"
               >
@@ -464,8 +476,8 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
               <button
                 onClick={() => setViewMode('grid')}
                 className={cn(
-                  'border-r-2 border-border/50 px-3 py-2 transition-all duration-300',
-                  viewMode === 'grid' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
+                  'border-r border-purple-100 px-3 py-2 transition-all duration-300',
+                  viewMode === 'grid' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
                 )}
                 title="Grid View"
               >
@@ -475,7 +487,7 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
                 onClick={() => setViewMode('list')}
                 className={cn(
                   'px-3 py-2 transition-all duration-300',
-                  viewMode === 'list' ? 'gradient-primary text-white shadow-lg' : 'hover:bg-accent/50'
+                  viewMode === 'list' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
                 )}
                 title="List View"
               >
@@ -512,7 +524,7 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
                 // Handle card updates
                 const card = cards.find(c => c.id === cardId);
                 if (card && onCardUpdate) {
-                  onCardUpdate({ ...card, ...updates });
+                  onCardUpdate(cardId, updates);
                 }
               }}
               onScheduleCard={(card) => setScheduleModalCard(card)}
@@ -613,6 +625,69 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
         budget={trip.budget_range?.[1]}
         onAddCards={handleAICardsGenerated}
         existingCards={cards}
+      />
+
+      {/* Place Search Modal */}
+      <PlaceSearchModal
+        isOpen={showPlaceSearch}
+        onClose={() => setShowPlaceSearch(false)}
+        cityCoordinates={trip.destination?.coordinates}
+        cityName={trip.destination?.name || 'this area'}
+        onAddToBoard={async (place: PlaceResult, cardType: 'hotel' | 'food' | 'spot') => {
+          // Create card from place
+          const cardData: Omit<Card, 'id' | 'created_at' | 'updated_at'> = {
+            trip_id: tripId || 'draft',
+            type: cardType,
+            payload_json: {
+              name: place.name,
+              address: place.address || '',
+              coordinates: place.coordinates,
+              photos: place.photos || [],
+              rating: place.rating,
+              review_count: place.review_count,
+              price_level: place.price_level,
+              opening_hours: place.opening_hours,
+              url: place.url,
+              phone: place.phone,
+              website: place.website,
+              description: place.editorial_summary,
+            },
+            labels: ['considering'],
+          };
+
+          // Guest mode - add locally
+          if (!tripId || tripId === 'draft' || isLoggedOut) {
+            if (onAddCard) {
+              const card: Card = {
+                id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                ...cardData,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              onAddCard(card);
+            }
+            return;
+          }
+
+          // Authenticated mode - save to API
+          try {
+            const response = await fetch('/api/cards', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(cardData),
+            });
+
+            if (!response.ok) throw new Error('Failed to add card');
+
+            const savedCard = await response.json();
+            if (onAddCard) {
+              onAddCard(savedCard);
+            }
+          } catch (error) {
+            console.error('Failed to add place to board:', error);
+            throw error;
+          }
+        }}
       />
     </div>
   );

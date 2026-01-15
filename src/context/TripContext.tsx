@@ -36,7 +36,7 @@ interface TripContextType {
   // State
   cards: Card[];
   trip: Partial<Trip> | null;
-  activeView: 'map' | 'board' | 'marketplace';
+  activeView: 'map' | 'board' | 'marketplace' | 'chat' | 'research';
   isModified: boolean;
   isSaving: boolean;
   isHydrated: boolean;
@@ -48,7 +48,8 @@ interface TripContextType {
 
   // Trip actions
   updateTrip: (updates: Partial<Trip>) => void;
-  setActiveView: (view: 'map' | 'board' | 'marketplace') => void;
+  setActiveView: (view: 'map' | 'board' | 'marketplace' | 'chat' | 'research') => void;
+  loadTripFromDatabase: (tripId: string) => Promise<boolean>;
 
   // Save actions
   saveToDatabase: (tripData?: CreateTripData) => Promise<{ success: boolean; tripId?: string; error?: string }>;
@@ -84,7 +85,7 @@ export function TripProvider({ children }: TripProviderProps) {
   // Local state that syncs with localStorage
   const [cards, setCards] = useState<Card[]>([]);
   const [trip, setTrip] = useState<Partial<Trip> | null>(null);
-  const [activeView, setActiveView] = useState<'map' | 'board' | 'marketplace'>('map');
+  const [activeView, setActiveView] = useState<'map' | 'board' | 'marketplace' | 'chat' | 'research'>('map');
   const [isModified, setIsModified] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -93,16 +94,18 @@ export function TripProvider({ children }: TripProviderProps) {
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showCreateTripModal, setShowCreateTripModal] = useState(false);
 
-  // Initialize pendingAction from localStorage to survive auth redirects
-  const [pendingActionState, setPendingActionState] = useState<'save' | 'share' | null>(() => {
+  // Initialize pendingAction - will be hydrated from localStorage in useEffect
+  const [pendingActionState, setPendingActionState] = useState<'save' | 'share' | null>(null);
+
+  // Hydrate pendingAction from localStorage on mount (survives auth redirects)
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('voyagr_pending_action');
       if (stored === 'save' || stored === 'share') {
-        return stored;
+        setPendingActionState(stored);
       }
     }
-    return null;
-  });
+  }, []);
 
   // Wrapper to sync pendingAction to localStorage
   const setPendingAction = useCallback((action: 'save' | 'share' | null) => {
@@ -124,6 +127,8 @@ export function TripProvider({ children }: TripProviderProps) {
         id: draft?.trip?.id || 'draft',
         title: draft?.trip?.title || 'My Trip',
         dates: draft?.trip?.dates || undefined,
+        destination: draft?.trip?.destination || undefined,
+        party_json: draft?.trip?.party_json || { adults: 1 },
       } as Partial<Trip>);
       setHasInitialized(true);
     }
@@ -172,13 +177,15 @@ export function TripProvider({ children }: TripProviderProps) {
   // Trip actions
   const updateTrip = useCallback(
     (updates: Partial<Trip>) => {
-      setTrip((prev) => ({ ...prev, ...updates }));
+      const updatedTrip = { ...trip, ...updates };
+      setTrip(updatedTrip);
       updateDraft({
         trip: {
-          id: trip?.id || 'draft',
-          title: updates.title || trip?.title || 'My Trip',
-          dates: updates.dates || trip?.dates || null,
-          destination: null,
+          id: updatedTrip.id || 'draft',
+          title: updatedTrip.title || 'My Trip',
+          dates: updatedTrip.dates || null,
+          destination: updatedTrip.destination || null,
+          party_json: updatedTrip.party_json || null,
         },
       });
     },
@@ -260,6 +267,40 @@ export function TripProvider({ children }: TripProviderProps) {
     }
   }, [user, cards, clearLocalDraft]);
 
+  // Load trip from database
+  const loadTripFromDatabase = useCallback(async (tripId: string): Promise<boolean> => {
+    try {
+      // Fetch trip data
+      const tripResponse = await fetch(`/api/trips/${tripId}`);
+      if (!tripResponse.ok) {
+        console.error('Failed to load trip');
+        return false;
+      }
+
+      const { trip: loadedTrip } = await tripResponse.json();
+
+      // Fetch trip cards
+      const cardsResponse = await fetch(`/api/cards?trip_id=${tripId}`);
+      if (!cardsResponse.ok) {
+        console.error('Failed to load cards');
+        return false;
+      }
+
+      const { cards: loadedCards } = await cardsResponse.json();
+
+      // Update state
+      setTrip(loadedTrip);
+      setCards(loadedCards || []);
+      setIsModified(false);
+      setHasInitialized(true);
+
+      return true;
+    } catch (error) {
+      console.error('Error loading trip from database:', error);
+      return false;
+    }
+  }, []);
+
   // Clear draft
   const clearDraft = useCallback(() => {
     clearLocalDraft();
@@ -292,6 +333,7 @@ export function TripProvider({ children }: TripProviderProps) {
     deleteCard,
     updateTrip,
     setActiveView,
+    loadTripFromDatabase,
     saveToDatabase,
     clearDraft,
     showSignInModal,

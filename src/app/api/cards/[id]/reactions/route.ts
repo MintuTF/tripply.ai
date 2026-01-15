@@ -1,4 +1,4 @@
-import { createServerComponentClient } from '@/lib/db/supabase';
+import { createServerComponentClient } from '@/lib/db/supabase-server';
 import { NextResponse } from 'next/server';
 
 // POST /api/cards/[id]/reactions - Add/remove a reaction to a comment

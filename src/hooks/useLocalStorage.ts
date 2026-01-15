@@ -9,20 +9,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  */
 export function useLocalStorage<T>(key: string, initialValue: T) {
   // State to store our value
-  // Pass initial state function to useState so logic is only executed once
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    if (typeof window === 'undefined') {
-      return initialValue;
-    }
-
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.warn(`Error reading localStorage key "${key}":`, error);
-      return initialValue;
-    }
-  });
+  // Always start with initialValue for SSR - hydrate in useEffect
+  const [storedValue, setStoredValue] = useState<T>(initialValue);
 
   // Track if we've hydrated from localStorage
   const [isHydrated, setIsHydrated] = useState(false);
@@ -93,7 +81,16 @@ export interface DraftTripData {
     id: string;
     title: string;
     dates: { start: string; end: string } | null;
-    destination: string | null;
+    destination: {
+      name: string;
+      place_id?: string;
+      coordinates?: { lat: number; lng: number };
+    } | null;
+    party_json: {
+      adults: number;
+      children?: number;
+      infants?: number;
+    } | null;
   };
   cards: any[]; // Using Card type from types/index.ts
   lastModified: string;
@@ -105,9 +102,10 @@ const DEFAULT_DRAFT: DraftTripData = {
     title: 'My Trip',
     dates: null,
     destination: null,
+    party_json: null,
   },
   cards: [],
-  lastModified: new Date().toISOString(),
+  lastModified: '', // Will be set when draft is first modified
 };
 
 export function useDraftTrip() {

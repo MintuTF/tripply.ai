@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Message } from '@/types';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
-import { cn } from '@/lib/utils';
+import { cn, generateUUID } from '@/lib/utils';
 import { Sparkles, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { SignInButton } from '@/components/auth/SignInButton';
@@ -122,7 +122,7 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
 
     // Add user message immediately
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       trip_id: tripId || 'temp',
       role: 'user',
       text,
@@ -130,7 +130,7 @@ export function ChatInterface({ tripId, onSendMessage }: ChatInterfaceProps) {
     };
 
     // Create empty assistant message for streaming
-    const assistantMessageId = crypto.randomUUID();
+    const assistantMessageId = generateUUID();
     const assistantMessage: Message = {
       id: assistantMessageId,
       trip_id: tripId || 'temp',
