@@ -34,11 +34,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Google AdSense Script */}
+        {/* Google AdSense Script - beforeInteractive ensures it's in initial HTML for crawler verification */}
         {adsenseEnabled && adsenseClientId && (
           <Script
             id="adsbygoogle-init"
-            strategy="afterInteractive"
+            strategy="beforeInteractive"
             crossOrigin="anonymous"
             src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
           />
