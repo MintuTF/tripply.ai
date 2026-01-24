@@ -31,8 +31,20 @@ export default function HomePage() {
                 Destinations
               </Link>
               <Link
-                href="/trips"
+                href="/guides"
                 className="hidden sm:block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Guides
+              </Link>
+              <Link
+                href="/blog"
+                className="hidden sm:block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Blog
+              </Link>
+              <Link
+                href="/trips"
+                className="hidden md:block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 My Trips
               </Link>
@@ -171,7 +183,8 @@ export default function HomePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><Link href="/plan" className="hover:text-foreground transition-colors">Plan a Trip</Link></li>
                 <li><Link href="/discover" className="hover:text-foreground transition-colors">Destinations</Link></li>
-                <li><Link href="/trips" className="hover:text-foreground transition-colors">My Trips</Link></li>
+                <li><Link href="/guides" className="hover:text-foreground transition-colors">Travel Guides</Link></li>
+                <li><Link href="/blog" className="hover:text-foreground transition-colors">Blog</Link></li>
               </ul>
             </div>
             <div>
