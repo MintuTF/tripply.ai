@@ -1,8 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/admin/auth';
 
 // POST /api/admin/migrate - Run database migration to add 'researching' status
 export async function POST(request: Request) {
+  // This route uses the service role key, so only a signed-in admin may call it
+  const { error: authError } = await requireAdmin();
+  if (authError) return authError;
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

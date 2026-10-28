@@ -20,26 +20,31 @@ export type Database = {
 
 // Client-side Supabase client
 export function createClientComponentClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    url || 'https://placeholder.supabase.co',
+    key || 'placeholder-key'
   );
+}
+
+/** True when the server can talk to Supabase with elevated rights (shared cache, shared trips, admin) */
+export function isServiceRoleConfigured(): boolean {
+  return !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 }
 
 // Service role client (for admin operations)
 // Use with caution - bypasses RLS
 export function createServiceRoleClient() {
-  const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-  console.log('[Supabase] Creating service role client:', { hasKey, hasUrl, url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + '...' });
-
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('[Supabase] SUPABASE_SERVICE_ROLE_KEY is NOT set!');
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');
+  }
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
   }
 
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
     {
       auth: {

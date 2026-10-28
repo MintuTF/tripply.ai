@@ -1,4 +1,4 @@
-import { getShareLink, getTrip, getTripCards } from '@/lib/db/queries';
+import { getSharedTripByToken } from '@/lib/db/queries';
 import { notFound } from 'next/navigation';
 import { SharedTripView } from './SharedTripView';
 
@@ -9,26 +9,23 @@ interface SharedTripPageProps {
 export default async function SharedTripPage({ params }: SharedTripPageProps) {
   const { token } = await params;
 
-  // Get share link
-  const shareLink = await getShareLink(token);
-  if (!shareLink) {
+  let shared;
+  try {
+    shared = await getSharedTripByToken(token);
+  } catch (error) {
+    console.error('[Shared] Failed to load shared trip:', error);
     notFound();
   }
 
-  // Get trip data
-  const trip = await getTrip(shareLink.trip_id);
-  if (!trip) {
+  if (!shared) {
     notFound();
   }
-
-  // Get trip cards
-  const cards = await getTripCards(shareLink.trip_id);
 
   return (
     <SharedTripView
-      trip={trip}
-      cards={cards}
-      role={shareLink.role}
+      trip={shared.trip}
+      cards={shared.cards}
+      role={shared.role}
     />
   );
 }

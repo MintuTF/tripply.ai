@@ -1,4 +1,5 @@
 import { createServerComponentClient } from './supabase-server';
+import { createServiceRoleClient, isServiceRoleConfigured } from './supabase';
 import type { Trip, Card, Message, User, ChatConversation, ChatMode } from '@/types';
 
 /**
@@ -288,6 +289,29 @@ export async function getShareLink(token: string) {
   }
 
   return data;
+}
+
+/**
+ * Load a trip for someone opening a share link. They are not the owner, so row level security would
+ * (correctly) hide everything from them; the server validates the token and reads with the service role.
+ * Returns null for an unknown or expired link. Read-only: nothing here lets a link holder change data.
+ */
+export async function getSharedTripByToken(token: string): Promise<{ role: 'viewer'; trip: Trip; cards: Card[] } | null> {
+  if (!token || token.length > 200 || !isServiceRoleConfigured()) return null;
+  const supabase = createServiceRoleClient();
+
+  const { data: link } = await supabase.from('share_links').select('trip_id, expires_at').eq('token', token).maybeSingle();
+  if (!link) return null;
+  if (link.expires_at && new Date(link.expires_at) < new Date()) return null;
+
+  const [{ data: trip }, { data: cards }] = await Promise.all([
+    supabase.from('trips').select('*').eq('id', link.trip_id).maybeSingle(),
+    supabase.from('cards').select('*').eq('trip_id', link.trip_id).order('created_at', { ascending: false }),
+  ]);
+  if (!trip) return null;
+
+  // Editing and commenting through a link are not supported yet (those APIs need a signed-in owner), so always viewer
+  return { role: 'viewer', trip, cards: cards || [] };
 }
 
 export async function getTripShareLinks(tripId: string) {
