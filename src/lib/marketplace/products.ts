@@ -1,10 +1,38 @@
 /**
- * Real Amazon Products for Voyagr Marketplace
+ * Real Amazon Products for Tripply Marketplace
  * Fetches from database with fallback to static products
  */
 
 import type { Product, ProductCategory } from '@/types/marketplace';
 import { createServiceRoleClient } from '@/lib/db/supabase';
+
+// UTF-8 text that was decoded as Windows-1252 shows up as "â€“" instead of "–". Repair it wherever products are read.
+const MOJIBAKE: [RegExp, string][] = [
+  [/â€“/g, '\u2013'],
+  [/â€”/g, '\u2014'],
+  [/â€™/g, '\u2019'],
+  [/â€˜/g, '\u2018'],
+  [/â€œ/g, '\u201C'],
+  [/â€\u009d|â€\u009D/g, '\u201D'],
+  [/â€¦/g, '\u2026'],
+  [/â€º/g, '\u203A'],
+  [/Â /g, ' '],
+  [/Â/g, ''],
+];
+
+export function fixMojibake(text: string): string {
+  if (!text || !/[âÂ]/.test(text)) return text;
+  return MOJIBAKE.reduce((acc, [pattern, replacement]) => acc.replace(pattern, replacement), text);
+}
+
+function cleanProduct(product: Product): Product {
+  return {
+    ...product,
+    name: fixMojibake(product.name),
+    description: fixMojibake(product.description),
+    shortDescription: fixMojibake(product.shortDescription),
+  };
+}
 
 // Cache for database products
 let cachedProducts: Product[] | null = null;
@@ -14,11 +42,31 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 /**
  * Fetch products from database
  */
-export async function fetchProductsFromDB(): Promise<Product[]> {
+// The recommendation engine asks for products from several places at once; share one lookup between them
+let inflightLookup: Promise<Product[]> | null = null;
+
+export function fetchProductsFromDB(): Promise<Product[]> {
+  if (!inflightLookup) {
+    inflightLookup = loadProducts().finally(() => {
+      inflightLookup = null;
+    });
+  }
+  return inflightLookup;
+}
+
+async function loadProducts(): Promise<Product[]> {
   // Check cache first
   if (cachedProducts && Date.now() - cacheTimestamp < CACHE_DURATION) {
     return cachedProducts;
   }
+
+  // Use the static catalog and remember that choice briefly, so an unavailable database isn't retried
+  // (and logged) several times for every single request.
+  const useStaticCatalog = (): Product[] => {
+    cachedProducts = PRODUCTS.map(cleanProduct);
+    cacheTimestamp = Date.now() - CACHE_DURATION + 60 * 1000; // retry the database in a minute
+    return cachedProducts;
+  };
 
   try {
     const supabase = createServiceRoleClient();
@@ -30,15 +78,15 @@ export async function fetchProductsFromDB(): Promise<Product[]> {
 
     if (error) {
       console.error('Error fetching products from DB:', error);
-      return PRODUCTS; // Fallback to static products
+      return useStaticCatalog();
     }
 
     if (!data || data.length === 0) {
-      return PRODUCTS; // Fallback to static products
+      return useStaticCatalog();
     }
 
     // Transform database format to Product type
-    const products: Product[] = data.map((row) => ({
+    const products: Product[] = data.map((row) => cleanProduct({
       id: row.id,
       name: row.name,
       description: row.description || '',
@@ -64,7 +112,7 @@ export async function fetchProductsFromDB(): Promise<Product[]> {
     return products;
   } catch (err) {
     console.error('Error in fetchProductsFromDB:', err);
-    return PRODUCTS; // Fallback to static products
+    return useStaticCatalog();
   }
 }
 
@@ -162,7 +210,7 @@ export const PRODUCTS: Product[] = [
     "image": "https://m.media-amazon.com/images/I/71IVNlezlUL._AC_SL1500_.jpg",
     "price": 3.37,
     "affiliateUrl": "https://www.amazon.com/Plackers-Micro-Dental-Floss-Travel/dp/B00AL14WES?th=1&psc=1&language=en_US&currency=USD",
-    "category": "clothing",
+    "category": "toiletries",
     "tags": [
       "clothing",
       "travel"
@@ -179,7 +227,7 @@ export const PRODUCTS: Product[] = [
     "image": "https://m.media-amazon.com/images/I/715wdpFqSPL._SL1500_.jpg",
     "price": 4.99,
     "affiliateUrl": "https://www.amazon.com/Wet-Brush-Detangler-pink-mini/dp/B07H45NFBF?th=1&psc=1&language=en_US&currency=USD",
-    "category": "clothing",
+    "category": "toiletries",
     "tags": [
       "clothing",
       "travel"
@@ -239,7 +287,7 @@ export const PRODUCTS: Product[] = [
     "image": "https://m.media-amazon.com/images/I/71zyl5Ql0UL._AC_SL1500_.jpg",
     "price": 2.99,
     "affiliateUrl": "https://www.amazon.com/Dramamine-Motion-Sickness-Drowsey-Formula/dp/B007BF7BUY?th=1&psc=1&language=en_US&currency=USD",
-    "category": "safety",
+    "category": "toiletries",
     "tags": [
       "safety",
       "travel"

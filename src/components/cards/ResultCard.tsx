@@ -64,7 +64,12 @@ export function ResultCard({
   const priceLevel = data.price_level || data.priceLevel as number | undefined;
   const priceRange = data.price_range as [number, number] | undefined;
   const typeInfo = getTypeInfo(data, card.type);
-  const description = data.description || data.notes;
+  const rawDescription = data.description || data.notes;
+  // Some sources put the address in `description`; don't repeat what the location line already shows
+  const description =
+    rawDescription && rawDescription !== location && rawDescription !== data.address
+      ? rawDescription
+      : undefined;
 
   // Handle both photos array and imageUrl string formats
   const photosArray = data.photos as string[] | undefined;

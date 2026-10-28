@@ -161,7 +161,7 @@ export function ChatVideoCarousel({
                   animate={{ opacity: 1, y: 0 }}
                   className="absolute top-4 right-4 flex items-center gap-2 z-20"
                 >
-                  <motion.button
+                  <motion.button aria-label="Toggle sound"
                     onClick={handleMuteToggle}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
@@ -192,7 +192,7 @@ export function ChatVideoCarousel({
                     exit={{ opacity: 0, scale: 0.8 }}
                     className="absolute inset-0 flex items-center justify-center z-20 bg-black/40 rounded-2xl"
                   >
-                    <motion.button
+                    <motion.button aria-label="Replay video"
                       onClick={handleReplay}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.95 }}

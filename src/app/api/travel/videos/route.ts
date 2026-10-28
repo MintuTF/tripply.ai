@@ -15,6 +15,10 @@ import {
 } from '@/lib/db/video-queries';
 import type { YouTubeVideo, VideoSearchResponse } from '@/types/video';
 
+// Successful results are identical for every visitor: let the CDN serve repeats instead of re-spending YouTube quota.
+// Empty/error responses deliberately carry no cache header so they're retried.
+const VIDEO_CDN_CACHE = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800';
+
 /**
  * GET /api/travel/videos
  * Search for cinematic travel videos for a city
@@ -161,7 +165,7 @@ export async function GET(request: NextRequest) {
         } as VideoSearchResponse & { source: string; stale?: boolean },
         {
           headers: {
-            'Cache-Control': 'public, max-age=3600', // 1 hour browser cache
+            'Cache-Control': VIDEO_CDN_CACHE,
             'X-Cache': 'HIT',
             'X-Cache-Source': 'database',
             ...createRateLimitHeaders(rateLimitResult),
@@ -279,7 +283,7 @@ export async function GET(request: NextRequest) {
       } as VideoSearchResponse & { source: string; totalInPool: number },
       {
         headers: {
-          'Cache-Control': 'public, max-age=3600',
+          'Cache-Control': VIDEO_CDN_CACHE,
           'X-Cache': 'MISS',
           'X-Cache-Source': 'youtube',
           ...createRateLimitHeaders(rateLimitResult),

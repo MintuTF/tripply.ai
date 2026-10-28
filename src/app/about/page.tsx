@@ -3,30 +3,12 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Plane, Users, Globe, Heart, ArrowLeft } from 'lucide-react';
+import { Navigation } from '@/components/shared/Navigation';
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-lg">
-                <Plane className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-foreground">Voyagr</span>
-            </Link>
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Home
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Navigation />
 
       {/* Hero */}
       <section className="pt-32 pb-16 px-4">
@@ -37,7 +19,7 @@ export default function AboutPage() {
             transition={{ duration: 0.5 }}
           >
             <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6">
-              About <span className="text-primary">Voyagr</span>
+              About <span className="text-primary">Tripply</span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Your AI-powered travel companion, helping you discover amazing destinations
@@ -65,7 +47,7 @@ export default function AboutPage() {
               {
                 icon: Heart,
                 title: 'Passion for Travel',
-                description: 'Our team shares your love for exploration. We build Voyagr to make travel planning as exciting as the trip.',
+                description: 'Our team shares your love for exploration. We build Tripply to make travel planning as exciting as the trip.',
               },
             ].map((item, index) => (
               <motion.div
@@ -100,7 +82,7 @@ export default function AboutPage() {
               To make travel planning effortless and inspiring. We combine cutting-edge AI
               technology with beautiful design to help you create trips that match your
               unique travel style. Whether you&apos;re a solo adventurer, a family traveler,
-              or exploring with friends, Voyagr is here to make your journey extraordinary.
+              or exploring with friends, Tripply is here to make your journey extraordinary.
             </p>
           </motion.div>
         </div>
@@ -110,7 +92,7 @@ export default function AboutPage() {
       <footer className="border-t border-border py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Voyagr. All rights reserved.
+            © {new Date().getFullYear()} Tripply. All rights reserved.
           </p>
         </div>
       </footer>

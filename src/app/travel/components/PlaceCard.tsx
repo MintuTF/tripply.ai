@@ -73,7 +73,7 @@ function getCardType(place: TravelPlace): 'hotel' | 'spot' | 'food' | 'activity'
 }
 
 export function PlaceCard({ place, onClick, index = 0 }: PlaceCardProps) {
-  const { state, savePlace, unsavePlace, createDraftTrip, addToTrip, createAndSaveTripToDatabase } = useTravel();
+  const { state, dispatch, savePlace, unsavePlace, createDraftTrip, addToTrip, createAndSaveTripToDatabase } = useTravel();
   const { user } = useAuth();
   const isSaved = state.savedPlaceIds.includes(place.id);
   const isInTrip = state.draftCards.some(c => c.placeData.id === place.id);
@@ -107,6 +107,15 @@ export function PlaceCard({ place, onClick, index = 0 }: PlaceCardProps) {
 
   const handleAddToTripClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    // Already in the draft trip: toggle it off instead of adding a duplicate
+    if (isInTrip) {
+      const card = state.draftCards.find(c => c.placeData.id === place.id);
+      if (card) {
+        dispatch({ type: 'REMOVE_FROM_DRAFT_TRIP', payload: card.id });
+      }
+      return;
+    }
 
     const cardType = getCardType(place);
 
@@ -155,7 +164,7 @@ export function PlaceCard({ place, onClick, index = 0 }: PlaceCardProps) {
       <div className="travel-card bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300">
         {/* Image Container */}
         <div className="relative h-40 overflow-hidden">
-          <motion.img
+          <motion.img loading="lazy" decoding="async"
             src={place.imageUrl || '/placeholder-place.jpg'}
             alt={place.name}
             className="w-full h-full object-cover"
@@ -169,7 +178,7 @@ export function PlaceCard({ place, onClick, index = 0 }: PlaceCardProps) {
           {/* Save Button (Bookmark) - top-left */}
           <div className="absolute top-3 left-3 z-10">
             <Tooltip content={isSaved ? "Saved ✓" : "Save for later"}>
-              <motion.button
+              <motion.button aria-label={isSaved ? 'Remove from saved places' : 'Save place'}
                 whileTap={{ scale: 0.9 }}
                 onClick={handleSaveClick}
                 className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm
@@ -188,7 +197,7 @@ export function PlaceCard({ place, onClick, index = 0 }: PlaceCardProps) {
           {/* Add to Trip Button - top-right */}
           <div className="absolute top-3 right-3 z-10">
             <Tooltip content={isInTrip ? "In trip ✓" : "Add to trip"}>
-              <motion.button
+              <motion.button aria-label={isInTrip ? 'Remove from trip' : 'Add to trip'}
                 whileTap={{ scale: 0.9 }}
                 onClick={handleAddToTripClick}
                 className={`w-10 h-10 rounded-full backdrop-blur-sm shadow-lg flex items-center justify-center transition-all ${
@@ -295,6 +304,16 @@ export function PlaceCard({ place, onClick, index = 0 }: PlaceCardProps) {
       <SignInModal
         isOpen={showSignInModal}
         onClose={() => {
+          window.sessionStorage?.removeItem('voyagr_pending_place');
+          setShowSignInModal(false);
+          setPendingPlace(null);
+        }}
+        onSkip={() => {
+          window.sessionStorage?.removeItem('voyagr_pending_place');
+          // Guest choice: keep the place in the local draft trip without an account
+          if (pendingPlace) {
+            addToTrip(pendingPlace.place, pendingPlace.cardType);
+          }
           setShowSignInModal(false);
           setPendingPlace(null);
         }}

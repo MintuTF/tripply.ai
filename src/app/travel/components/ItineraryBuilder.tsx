@@ -657,7 +657,7 @@ export function ItineraryBuilder({
                                   key={item.id}
                                   className="flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm"
                                 >
-                                  <img
+                                  <img loading="lazy" decoding="async"
                                     src={item.imageUrl || '/placeholder-place.jpg'}
                                     alt={item.name}
                                     className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
@@ -794,7 +794,7 @@ export function ItineraryBuilder({
                                       <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
                                         {index + 1}
                                       </div>
-                                      <img
+                                      <img loading="lazy" decoding="async"
                                         src={item.imageUrl || '/placeholder-place.jpg'}
                                         alt={item.name}
                                         className="w-12 h-12 rounded-lg object-cover flex-shrink-0"

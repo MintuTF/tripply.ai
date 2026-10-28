@@ -16,7 +16,7 @@ export const blogPosts: BlogPost[] = [
     title: '10 Essential Packing Tips for International Travel',
     excerpt: 'Master the art of packing light while ensuring you have everything you need for your international adventure.',
     category: 'Travel Tips',
-    author: 'Voyagr Team',
+    author: 'Tripply Team',
     date: '2025-01-15',
     readTime: '8 min read',
     image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&q=80',
@@ -85,7 +85,7 @@ Happy travels!
     title: 'How to Plan the Perfect Weekend Getaway',
     excerpt: 'Transform a regular weekend into an unforgettable mini-adventure with our step-by-step planning guide.',
     category: 'Planning',
-    author: 'Voyagr Team',
+    author: 'Tripply Team',
     date: '2025-01-12',
     readTime: '6 min read',
     image: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&q=80',
@@ -187,7 +187,7 @@ The perfect weekend getaway is closer than you think. Pick a destination, mark y
     title: 'Budget Travel: Exploring Europe on $50/Day',
     excerpt: 'Discover how to experience the best of Europe without breaking the bank with our comprehensive budget travel guide.',
     category: 'Budget Travel',
-    author: 'Voyagr Team',
+    author: 'Tripply Team',
     date: '2025-01-10',
     readTime: '10 min read',
     image: 'https://images.unsplash.com/photo-1491557345352-5929e343eb89?w=800&q=80',
@@ -348,7 +348,7 @@ Where will your budget-friendly European adventure take you?
     title: 'Solo Travel Safety Tips for First-Time Adventurers',
     excerpt: 'Feel confident and secure on your first solo journey with these essential safety tips and strategies.',
     category: 'Solo Travel',
-    author: 'Voyagr Team',
+    author: 'Tripply Team',
     date: '2025-01-08',
     readTime: '7 min read',
     image: 'https://images.unsplash.com/photo-1501555088652-021faa106b9b?w=800&q=80',
@@ -514,7 +514,7 @@ Armed with these safety tips, you're ready to take on the world. Start planning 
     title: 'Best Travel Apps to Download Before Your Next Trip',
     excerpt: 'Discover the must-have apps that will make your travels smoother, from planning to exploring to getting home.',
     category: 'Travel Tips',
-    author: 'Voyagr Team',
+    author: 'Tripply Team',
     date: '2025-01-05',
     readTime: '6 min read',
     image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=800&q=80',
@@ -603,7 +603,7 @@ Automatically organizes your travel plans from confirmation emails. Access all b
 - **Best for**: Keeping itineraries organized
 - **Pro tip**: Forward confirmation emails for automatic parsing
 
-### Voyagr
+### Tripply
 Plan your perfect trip with AI-powered recommendations. Save places, build itineraries, and discover destinations.
 - **Best for**: Trip inspiration and planning
 - **Pro tip**: Use the research mode to get personalized recommendations

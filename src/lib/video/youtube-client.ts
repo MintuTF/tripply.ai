@@ -146,6 +146,55 @@ const COLLECTION_SEARCH_TERMS: Record<string, string> = {
 // YouTube API Functions
 // ============================================
 
+// ============================================
+// Quota protection
+// search.list costs 100 units and the free quota is 10,000/day (~99 searches), so every
+// search is cached, de-duplicated while in flight, and blocked once the quota is exhausted.
+// ============================================
+
+const SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const SEARCH_CACHE_MAX_ENTRIES = 300;
+const searchCache = new Map<string, { items: YouTubeSearchItem[]; timestamp: number }>();
+const searchInflight = new Map<string, Promise<YouTubeSearchItem[]>>();
+
+let quotaBlockedUntil = 0;
+const usage = { day: '', searches: 0 };
+
+function pacificDay(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+}
+
+// YouTube quota resets at midnight Pacific time
+function msUntilPacificMidnight(): number {
+  const now = new Date();
+  const pt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const next = new Date(pt);
+  next.setHours(24, 0, 0, 0);
+  return next.getTime() - pt.getTime();
+}
+
+function recordSearchUsage(): void {
+  const today = pacificDay();
+  if (usage.day !== today) {
+    usage.day = today;
+    usage.searches = 0;
+  }
+  usage.searches += 1;
+  console.log(
+    `[YouTubeClient] search.list #${usage.searches} today on this instance (~${usage.searches * 100} of 10,000 units)`
+  );
+}
+
+/** Rough per-instance view of today's search spend, for logs or a health endpoint */
+export function getYouTubeUsage() {
+  return {
+    day: usage.day,
+    searches: usage.searches,
+    estimatedUnits: usage.searches * 100,
+    blockedForMs: Math.max(0, quotaBlockedUntil - Date.now()),
+  };
+}
+
 /**
  * Search YouTube for videos
  * Returns basic video info (no duration - need separate API call)
@@ -159,42 +208,82 @@ export async function searchYouTubeVideos(
     return [];
   }
 
-  const url = new URL(YOUTUBE_SEARCH_URL);
-  url.searchParams.set('part', 'snippet');
-  url.searchParams.set('type', 'video');
-  url.searchParams.set('videoEmbeddable', 'true');
-  url.searchParams.set('safeSearch', 'strict');
-  url.searchParams.set('maxResults', String(options.maxResults || 25));
-  url.searchParams.set('order', options.order || 'relevance');
-  url.searchParams.set('q', query);
-  url.searchParams.set('key', YOUTUBE_API_KEY);
+  const cacheKey = JSON.stringify([
+    query.trim().toLowerCase(),
+    options.maxResults || 25,
+    options.order || 'relevance',
+    options.videoDuration || 'any',
+    options.videoDefinition || 'any',
+  ]);
 
-  if (options.videoDuration && options.videoDuration !== 'any') {
-    url.searchParams.set('videoDuration', options.videoDuration);
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < SEARCH_CACHE_TTL_MS) {
+    return cached.items;
   }
 
-  if (options.videoDefinition && options.videoDefinition !== 'any') {
-    url.searchParams.set('videoDefinition', options.videoDefinition);
+  // Quota exhausted (or key rejected): don't spend more requests until it can recover
+  if (Date.now() < quotaBlockedUntil) {
+    throw new Error('QUOTA_EXCEEDED');
   }
 
-  try {
+  const pending = searchInflight.get(cacheKey);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const url = new URL(YOUTUBE_SEARCH_URL);
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('type', 'video');
+    url.searchParams.set('videoEmbeddable', 'true');
+    url.searchParams.set('safeSearch', 'strict');
+    url.searchParams.set('maxResults', String(options.maxResults || 25));
+    url.searchParams.set('order', options.order || 'relevance');
+    url.searchParams.set('q', query);
+    url.searchParams.set('key', YOUTUBE_API_KEY);
+
+    if (options.videoDuration && options.videoDuration !== 'any') {
+      url.searchParams.set('videoDuration', options.videoDuration);
+    }
+
+    if (options.videoDefinition && options.videoDefinition !== 'any') {
+      url.searchParams.set('videoDefinition', options.videoDefinition);
+    }
+
+    recordSearchUsage();
     const response = await fetch(url.toString());
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      console.error('[YouTubeClient] Search API error:', response.status, error);
+      const body = await response.json().catch(() => ({}));
+      console.error('[YouTubeClient] Search API error:', response.status, body?.error?.message || '');
 
       if (response.status === 403) {
+        const reason: string = body?.error?.errors?.[0]?.reason || '';
+        const quotaGone = reason === 'quotaExceeded' || reason === 'dailyLimitExceeded';
+        // Quota resets at midnight Pacific; other 403s (key restricted, API disabled) won't fix themselves quickly
+        quotaBlockedUntil = Date.now() + (quotaGone ? msUntilPacificMidnight() : 10 * 60 * 1000);
         throw new Error('QUOTA_EXCEEDED');
       }
       throw new Error(`YouTube API error: ${response.status}`);
     }
 
     const data: YouTubeSearchResponse = await response.json();
-    return data.items || [];
+    const items = data.items || [];
+
+    if (searchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
+      const oldest = searchCache.keys().next().value;
+      if (oldest !== undefined) searchCache.delete(oldest);
+    }
+    searchCache.set(cacheKey, { items, timestamp: Date.now() });
+    return items;
+  })();
+
+  searchInflight.set(cacheKey, request);
+  try {
+    return await request;
   } catch (error) {
     console.error('[YouTubeClient] Search failed:', error);
     throw error;
+  } finally {
+    searchInflight.delete(cacheKey);
   }
 }
 

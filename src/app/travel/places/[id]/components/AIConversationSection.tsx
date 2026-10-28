@@ -71,9 +71,13 @@ export function AIConversationSection({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Scroll only when a new message is added (not on mount)
+  const prevMessageCount = useRef(state.messages.length);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (state.messages.length > prevMessageCount.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    prevMessageCount.current = state.messages.length;
   }, [state.messages]);
 
   const sendMessage = async (content: string) => {

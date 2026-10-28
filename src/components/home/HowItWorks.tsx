@@ -57,7 +57,7 @@ export function HowItWorks({ className }: HowItWorksProps) {
             viewport={{ once: true }}
           >
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-              How Voyagr Works
+              How Tripply Works
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Plan your perfect trip in three simple steps. From inspiration to itinerary, we've got you covered.

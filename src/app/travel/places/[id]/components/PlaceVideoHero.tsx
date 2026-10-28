@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Video } from 'lucide-react';
-import { VideoPlayer, VideoSummary } from '@/components/video';
+import { VideoPlayer, VideoPlacesPanel, VideoOverviewCard, VideoGoodToKnowCard } from '@/components/video';
+import { useVideoInsights } from '@/hooks/useVideoInsights';
 import type { TravelPlace } from '@/lib/travel/types';
 import type { YouTubeVideo } from '@/types/video';
-import type { VideoPageAnalysis } from '@/lib/video/types';
 
 interface PlaceVideoHeroProps {
   place: TravelPlace;
@@ -16,9 +16,7 @@ interface PlaceVideoHeroProps {
 export function PlaceVideoHero({ place, onVideosLoaded }: PlaceVideoHeroProps) {
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
   const [currentVideo, setCurrentVideo] = useState<YouTubeVideo | null>(null);
-  const [analysis, setAnalysis] = useState<VideoPageAnalysis | null>(null);
   const [isLoadingVideos, setIsLoadingVideos] = useState(true);
-  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
 
   // Fetch videos for this place
   useEffect(() => {
@@ -51,57 +49,16 @@ export function PlaceVideoHero({ place, onVideosLoaded }: PlaceVideoHeroProps) {
     fetchVideos();
   }, [place.id, place.name, place.area, onVideosLoaded]);
 
-  // Fetch video analysis when current video changes
-  useEffect(() => {
-    if (!currentVideo) return;
-
-    const fetchAnalysis = async () => {
-      setIsLoadingAnalysis(true);
-      try {
-        const response = await fetch('/api/travel/ai/respond', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'videoAnalysis',
-            videoId: currentVideo.videoId,
-            videoTitle: currentVideo.title,
-            videoDescription: currentVideo.description || '',
-            city: place.area || place.name,
-          }),
-        });
-
-        const data = await response.json();
-        if (data.analysis) {
-          setAnalysis(data.analysis);
-        } else {
-          // Fallback summary
-          setAnalysis({
-            summary: `This video features ${place.name}${place.area ? ` in ${place.area}` : ''}. Watch to discover what makes this place special and get insider tips from the creator.`,
-            places: [{ name: place.name, type: place.categories[0] || 'attraction' }],
-            highlights: [
-              'Local insights and recommendations',
-              'Visual tour of the location',
-              'Tips for visitors',
-            ],
-            analyzedAt: Date.now(),
-          });
-        }
-      } catch (error) {
-        console.error('Failed to fetch video analysis:', error);
-        // Set fallback on error
-        setAnalysis({
-          summary: `Explore ${place.name} through this video. Discover the atmosphere, offerings, and what visitors love about this place.`,
-          places: [{ name: place.name, type: place.categories[0] || 'attraction' }],
-          highlights: [],
-          analyzedAt: Date.now(),
-        });
-      } finally {
-        setIsLoadingAnalysis(false);
-      }
-    };
-
-    fetchAnalysis();
-  }, [currentVideo, place.name, place.area, place.categories]);
+  // Read the video's captions: what it says (summary, key points, tips) and the places it names
+  const city = place.area || '';
+  const { result: insights, status: insightsStatus, retry: retryInsights } = useVideoInsights({
+    videoId: currentVideo?.videoId,
+    title: currentVideo?.title,
+    description: currentVideo?.description,
+    city,
+  });
+  const [seekRequest, setSeekRequest] = useState<{ sec: number; nonce: number } | null>(null);
+  const seek = (sec: number) => setSeekRequest({ sec, nonce: Date.now() });
 
   // Loading state
   if (isLoadingVideos) {
@@ -155,31 +112,37 @@ export function PlaceVideoHero({ place, onVideosLoaded }: PlaceVideoHeroProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           {/* Left: Video Player with purple glow */}
-          <div className="w-full lg:w-[60%]">
+          <div className="w-full lg:w-[60%] lg:sticky lg:top-20 lg:self-start">
             <div className="relative">
               <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-3xl blur-lg opacity-30" />
               <div className="relative ring-2 ring-purple-400/60 shadow-2xl shadow-purple-500/30 rounded-2xl overflow-hidden">
                 <VideoPlayer
                   videoId={currentVideo.videoId}
-                  title={currentVideo.title}
-                  channelTitle={currentVideo.channelTitle}
+                  seekRequest={seekRequest}
                 />
               </div>
             </div>
           </div>
 
-          {/* Right: AI Video Summary */}
+          {/* Right: what the video says, its places, and what to know */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
-            className="w-full lg:w-[40%]"
+            className="w-full lg:w-[40%] space-y-6"
           >
-            <VideoSummary
-              analysis={analysis}
-              isLoading={isLoadingAnalysis}
-              variant="card"
+            <VideoOverviewCard result={insights} status={insightsStatus} onSeek={seek} />
+            <VideoPlacesPanel
+              videoId={currentVideo.videoId}
+              title={currentVideo.title}
+              channel={currentVideo.channelTitle}
+              city={city}
+              result={insights}
+              status={insightsStatus}
+              onRetry={retryInsights}
+              onSeek={seek}
             />
+            <VideoGoodToKnowCard result={insights} status={insightsStatus} onSeek={seek} />
           </motion.div>
         </div>
       </div>

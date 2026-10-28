@@ -47,6 +47,8 @@ export function PlaceSearchInput({
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // After picking a result the query changes to its name; don't re-open the list for that
+  const suppressReopenRef = useRef(false);
 
   // Use cached autocomplete hook with location bias
   const locationString = cityCoordinates
@@ -63,6 +65,7 @@ export function PlaceSearchInput({
 
   // Open dropdown when predictions arrive
   useEffect(() => {
+    if (suppressReopenRef.current) return;
     if (predictions.length > 0 && query.length >= 2) {
       setIsOpen(true);
     }
@@ -100,6 +103,7 @@ export function PlaceSearchInput({
 
   // Handle place selection
   const handleSelect = (prediction: PlacePrediction) => {
+    suppressReopenRef.current = true;
     setQuery(prediction.main_text);
     setIsOpen(false);
     setHighlightedIndex(-1);
@@ -139,9 +143,12 @@ export function PlaceSearchInput({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            suppressReopenRef.current = false;
+            setQuery(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
-          onFocus={() => predictions.length > 0 && setIsOpen(true)}
+          onFocus={() => !suppressReopenRef.current && predictions.length > 0 && setIsOpen(true)}
           placeholder={placeholder}
           autoFocus={autoFocus}
           className="w-full pl-12 pr-12 py-3.5 rounded-xl border-2 border-purple-100 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all"

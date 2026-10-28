@@ -175,10 +175,7 @@ export function PlacesSearchSidebar({
           {TYPE_TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = typeFilter === tab.id;
-            const count = (useRealTimeData && allFetchedCards.length > 0
-              ? allFetchedCards
-              : displayCards
-            ).filter((c) => c.type === tab.id).length;
+            const count = displayCards.filter((c) => c.type === tab.id).length;
 
             return (
               <button
@@ -231,7 +228,7 @@ export function PlacesSearchSidebar({
         {confirmedLocation && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              {(isLoadingPlaces || isFetchingAll) && (
+              {isLoadingPlaces && (
                 <Loader2 className="h-3 w-3 animate-spin text-primary" />
               )}
               <span>{displayCards.length} places</span>
@@ -270,7 +267,7 @@ export function PlacesSearchSidebar({
 
       <div className="flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
-          {(isLoadingPlaces || isFetchingAll) ? (
+          {isLoadingPlaces ? (
             <motion.div
               key="loading"
               initial={{ opacity: 0 }}
@@ -337,7 +334,7 @@ export function PlacesSearchSidebar({
                         className="relative overflow-hidden rounded-xl border-2 border-border bg-card transition-all hover:border-primary hover:shadow-lg group"
                       >
                         <div className="aspect-[4/3] relative">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={dest.image}
                             alt={dest.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

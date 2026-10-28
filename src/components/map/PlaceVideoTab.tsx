@@ -102,7 +102,7 @@ export function PlaceVideoTab({ placeName, placeId }: PlaceVideoTabProps) {
             className="relative aspect-video rounded-xl overflow-hidden group focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
           >
             {/* Thumbnail */}
-            <img
+            <img loading="lazy" decoding="async"
               src={video.thumbnailUrl}
               alt={video.title}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"

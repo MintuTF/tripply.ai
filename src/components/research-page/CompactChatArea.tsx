@@ -224,7 +224,7 @@ export function CompactChatArea({
     });
 
     markdown += `\n---\n\n`;
-    markdown += `*Exported from Voyagr AI on ${new Date().toLocaleString()}*\n`;
+    markdown += `*Exported from Tripply AI on ${new Date().toLocaleString()}*\n`;
 
     const filename = `${destination.toLowerCase().replace(/\s+/g, '-')}-research-${new Date().toISOString().split('T')[0]}.md`;
     downloadMarkdown(markdown, filename);

@@ -145,7 +145,7 @@ export function CityHighlights({ cityName, places, onPlaceClick, isLoading = fal
               >
                 {/* Image */}
                 <div className="relative h-44 overflow-hidden">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={place.imageUrl || '/placeholder-place.jpg'}
                     alt={place.name}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"

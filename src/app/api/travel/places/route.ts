@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { TravelPlace } from '@/lib/travel/types';
+import { placePhotoUrl } from '@/lib/places/photo';
 
 // In-memory cache for places
 const placesCache = new Map<string, { places: TravelPlace[]; timestamp: number }>();
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours: a city's nearby places barely change, and each load costs 5 paid searches
+const inflight = new Map<string, Promise<TravelPlace[]>>();
+
+// Edge-cache identical city lookups across all users
+const CDN_CACHE = 'public, s-maxage=21600, stale-while-revalidate=86400';
 
 // Global place storage by ID (shared with /api/travel/place/details)
 declare global {
@@ -1380,14 +1385,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const cacheKey = `${lat},${lng},${radius},${city}`;
+  const cacheKey = `${parseFloat(lat).toFixed(3)},${parseFloat(lng).toFixed(3)},${radius},${city.toLowerCase()}`;
 
   // Check cache
   const cached = placesCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     // Store in global storage for detail page access
     cached.places.forEach(place => global.placesById?.set(place.id, place));
-    return NextResponse.json({ places: cached.places, cached: true });
+    return NextResponse.json({ places: cached.places, cached: true }, { headers: { 'Cache-Control': CDN_CACHE } });
   }
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
@@ -1399,35 +1404,61 @@ export async function GET(request: NextRequest) {
     placesCache.set(cacheKey, { places: demoPlaces, timestamp: Date.now() });
     // Store in global storage for detail page access
     demoPlaces.forEach(place => global.placesById?.set(place.id, place));
-    return NextResponse.json({ places: demoPlaces, demo: true });
+    return NextResponse.json({ places: demoPlaces, demo: true }, { headers: { 'Cache-Control': 'public, s-maxage=60' } });
   }
+
+  // Someone is already loading this city: wait for that result instead of paying for a second set of calls
+  const pending = inflight.get(cacheKey);
+  if (pending) {
+    try {
+      const places = await pending;
+      return NextResponse.json({ places, cached: true }, { headers: { 'Cache-Control': CDN_CACHE } });
+    } catch {
+      return NextResponse.json({ error: 'Failed to fetch places' }, { status: 500 });
+    }
+  }
+
+  let settle!: { resolve: (p: TravelPlace[]) => void; reject: (e: unknown) => void };
+  const shared = new Promise<TravelPlace[]>((resolve, reject) => {
+    settle = { resolve, reject };
+  });
+  shared.catch(() => {}); // avoid unhandled rejection when nobody else is waiting
+  inflight.set(cacheKey, shared);
 
   try {
     const allPlaces: TravelPlace[] = [];
     const seenIds = new Set<string>();
 
     // Fetch places for each type
-    for (const type of PLACE_TYPES.slice(0, 5)) { // Limit to first 5 types for performance
-      const url = new URL('https://maps.googleapis.com/maps/api/place/nearbysearch/json');
-      url.searchParams.set('location', `${lat},${lng}`);
-      url.searchParams.set('radius', radius);
-      url.searchParams.set('type', type);
-      url.searchParams.set('key', apiKey);
+    console.log(`[Google] City load for "${city}": 5 Nearby Search calls (~$0.16, cache miss)`);
+    const typeResults = await Promise.all(
+      PLACE_TYPES.slice(0, 5).map(async (type): Promise<any[]> => {
+        const url = new URL('https://maps.googleapis.com/maps/api/place/nearbysearch/json');
+        url.searchParams.set('location', `${lat},${lng}`);
+        url.searchParams.set('radius', radius);
+        url.searchParams.set('type', type);
+        url.searchParams.set('key', apiKey);
 
-      const response = await fetch(url.toString());
-      if (!response.ok) continue;
+        try {
+          const response = await fetch(url.toString());
+          if (!response.ok) return [];
+          const data = await response.json();
+          return data.status === 'OK' && data.results ? data.results : [];
+        } catch {
+          return [];
+        }
+      })
+    );
 
-      const data = await response.json();
-      if (data.status !== 'OK' || !data.results) continue;
-
-      for (const place of data.results) {
+    for (const results of typeResults) {
+      for (const place of results) {
         if (seenIds.has(place.place_id)) continue;
         seenIds.add(place.place_id);
 
         // Get photo URL if available
         let imageUrl = '/placeholder-place.jpg';
         if (place.photos?.[0]?.photo_reference) {
-          imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${place.photos[0].photo_reference}&key=${apiKey}`;
+          imageUrl = placePhotoUrl(place.photos[0].photo_reference, 400);
         }
 
         // Extract categories from types
@@ -1488,13 +1519,17 @@ export async function GET(request: NextRequest) {
     // Store in global storage for detail page access
     filteredPlaces.forEach(place => global.placesById?.set(place.id, place));
 
-    return NextResponse.json({ places: filteredPlaces });
+    settle.resolve(filteredPlaces);
+    return NextResponse.json({ places: filteredPlaces }, { headers: { 'Cache-Control': CDN_CACHE } });
   } catch (error) {
+    settle.reject(error);
     console.error('Failed to fetch places:', error);
     return NextResponse.json(
       { error: 'Failed to fetch places' },
       { status: 500 }
     );
+  } finally {
+    inflight.delete(cacheKey);
   }
 }
 

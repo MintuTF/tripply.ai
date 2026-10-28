@@ -2,30 +2,12 @@
 
 import Link from 'next/link';
 import { Plane, ArrowLeft } from 'lucide-react';
+import { Navigation } from '@/components/shared/Navigation';
 
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-lg">
-                <Plane className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-foreground">Voyagr</span>
-            </Link>
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Home
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Navigation />
 
       {/* Content */}
       <main className="pt-32 pb-16 px-4">
@@ -95,7 +77,7 @@ export default function PrivacyPage() {
       <footer className="border-t border-border py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Voyagr. All rights reserved.
+            © {new Date().getFullYear()} Tripply. All rights reserved.
           </p>
         </div>
       </footer>

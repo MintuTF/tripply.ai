@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, CheckCircle2, AlertCircle, Loader2, X } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTripContext } from '@/context/TripContext';
 import { getTripContextSummary } from '@/lib/marketplace/tripContextUtils';
@@ -11,30 +11,25 @@ interface SmartAssistantCardProps {
 }
 
 export function SmartAssistantCard({ onCheckComplete }: SmartAssistantCardProps) {
-  const [isChecking, setIsChecking] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [checklist, setChecklist] = useState<{
     category: string;
     items: string[];
     status: 'complete' | 'missing';
+    label: string;
   }[]>([]);
 
   const { trip, cards } = useTripContext();
   const tripSummary = getTripContextSummary(trip);
 
-  // Simulate AI checklist generation
-  const handleCheckTrip = async () => {
-    setIsChecking(true);
-    setShowResults(false);
-
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Generate checklist based on trip context
+  // Rule-based packing checklist: compares a standard list of categories with the products in the trip
+  const handleCheckTrip = () => {
     const productCards = cards?.filter(card => card.type === 'product') || [];
-    const productCategories = new Set(
-      productCards.map(card => (card.payload_json as any)?.category).filter(Boolean)
-    );
+    const countByCategory = productCards.reduce<Record<string, number>>((acc, card) => {
+      const category = (card.payload_json as any)?.category;
+      if (category) acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {});
 
     // Essential categories for any trip
     const essentialCategories = [
@@ -59,17 +54,18 @@ export function SmartAssistantCard({ onCheckComplete }: SmartAssistantCardProps)
 
     // Check what's missing
     const results = essentialCategories.map(({ category, items }) => {
-      const hasCategory = productCategories.has(category.toLowerCase());
-      return {
-        category,
-        items,
-        status: hasCategory ? 'complete' as const : 'missing' as const
-      };
+      const count = countByCategory[category.toLowerCase()] || 0;
+      // Documents aren't something you buy here, so they're a reminder rather than something "missing"
+      if (category === 'Documents') {
+        return { category, items, status: 'missing' as const, label: 'Reminder' };
+      }
+      return count > 0
+        ? { category, items, status: 'complete' as const, label: `${count} in your trip` }
+        : { category, items, status: 'missing' as const, label: 'Not added yet' };
     });
 
     setChecklist(results);
     setShowResults(true);
-    setIsChecking(false);
 
     // Callback with missing items
     const missingItems = results
@@ -98,33 +94,18 @@ export function SmartAssistantCard({ onCheckComplete }: SmartAssistantCardProps)
                 💡 Need a hand?
               </h3>
               <p className="text-sm text-gray-700 leading-relaxed mb-4">
-                Want me to check if you're missing anything for{' '}
-                {tripSummary?.destination ? `your trip to ${tripSummary.destination}` : 'this trip'}?
+                See what you may still need to pack for{' '}
+                {tripSummary?.destination ? `your trip to ${tripSummary.destination}` : 'this trip'}.
               </p>
 
               <button
                 onClick={handleCheckTrip}
-                disabled={isChecking}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium hover:shadow-lg hover:shadow-blue-200 transition-all disabled:opacity-70"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium hover:shadow-lg hover:shadow-blue-200 transition-all"
               >
-                {isChecking ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Checking...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Check My Trip</span>
-                  </>
-                )}
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Show packing checklist</span>
               </button>
 
-              {/* Trust indicator */}
-              <p className="text-xs text-gray-500 mt-3">
-                Used by 75% of travelers to{' '}
-                {tripSummary?.destination || 'popular destinations'}
-              </p>
             </div>
           </div>
         </div>
@@ -141,7 +122,7 @@ export function SmartAssistantCard({ onCheckComplete }: SmartAssistantCardProps)
               <div className="flex items-center gap-3">
                 <Sparkles className="w-5 h-5 text-purple-600" />
                 <h3 className="font-bold text-gray-900">
-                  Trip Checklist Results
+                  Packing checklist
                 </h3>
               </div>
               <button
@@ -185,7 +166,7 @@ export function SmartAssistantCard({ onCheckComplete }: SmartAssistantCardProps)
                         ? 'bg-green-100 text-green-700'
                         : 'bg-orange-100 text-orange-700'
                     }`}>
-                      {item.status === 'complete' ? 'Complete' : 'Missing'}
+                      {item.label}
                     </span>
                   </div>
                   <ul className="space-y-1">

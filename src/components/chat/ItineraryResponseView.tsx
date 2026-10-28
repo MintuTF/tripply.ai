@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Users, Zap, Sparkles, RefreshCw, Plus, Sliders } from 'lucide-react';
+import { Calendar, Users, Zap, Sparkles, RefreshCw, Plus, Sliders, CalendarPlus, Check } from 'lucide-react';
 import type { ItineraryResponse } from '@/types';
 import { ItineraryDayCard } from './ItineraryDayCard';
 import { cn } from '@/lib/utils';
@@ -11,6 +12,9 @@ export interface ItineraryResponseViewProps {
   onAdjustPace?: () => void;
   onAddDay?: () => void;
   onChangeFocus?: () => void;
+  /** Put the plan's stops on the trip board; returns how many were added and how many couldn't be matched to a real place */
+  onAddToBoard?: () => { added: number; skipped: number };
+  onOpenBoard?: () => void;
   className?: string;
 }
 
@@ -19,9 +23,12 @@ export function ItineraryResponseView({
   onAdjustPace,
   onAddDay,
   onChangeFocus,
+  onAddToBoard,
+  onOpenBoard,
   className,
 }: ItineraryResponseViewProps) {
   const { tripSummary, whyThisPlanWorks, days } = itinerary;
+  const [boardResult, setBoardResult] = useState<{ added: number; skipped: number } | null>(null);
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -76,6 +83,50 @@ export function ItineraryResponseView({
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Put the plan on the trip board */}
+        {onAddToBoard && (
+          <div className="mt-4 pt-3 border-t border-purple-200/50 dark:border-purple-700/30">
+            {boardResult === null ? (
+              <button
+                type="button"
+                onClick={() => setBoardResult(onAddToBoard())}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-shadow"
+              >
+                <CalendarPlus className="w-4 h-4" />
+                Add this plan to my board
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div
+                  className={cn(
+                    'flex items-start gap-2 text-sm font-medium',
+                    boardResult.added > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
+                  )}
+                >
+                  {boardResult.added > 0 && <Check className="w-4 h-4 mt-0.5 shrink-0" />}
+                  {boardResult.added > 0
+                    ? `${boardResult.added} stop${boardResult.added === 1 ? '' : 's'} added to your board, scheduled by day`
+                    : "We couldn't match this plan's stops to specific places. Generate the plan again to add it."}
+                </div>
+                {boardResult.skipped > 0 && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {boardResult.skipped} general suggestion{boardResult.skipped === 1 ? '' : 's'} (not a specific place) weren&apos;t added.
+                  </p>
+                )}
+                {onOpenBoard && (
+                  <button
+                    type="button"
+                    onClick={onOpenBoard}
+                    className="rounded-lg border border-purple-200 bg-white px-3 py-1.5 text-sm font-medium text-purple-700 hover:bg-purple-50 dark:bg-gray-800 dark:border-purple-700 dark:text-purple-300"
+                  >
+                    Open my board
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </motion.div>

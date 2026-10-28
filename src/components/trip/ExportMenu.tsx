@@ -32,6 +32,8 @@ export function ExportMenu({ trip, cards }: ExportMenuProps) {
 
   const confirmedCount = cards.filter(c => c.labels?.includes('confirmed')).length;
   const hasConfirmedCards = confirmedCount > 0;
+  const placeCount = cards.filter((c) => ['hotel', 'spot', 'food', 'activity'].includes(c.type)).length;
+  const hasPlaces = placeCount > 0;
 
   const handleExportPDF = async () => {
     setLoading('pdf');
@@ -76,10 +78,10 @@ export function ExportMenu({ trip, cards }: ExportMenuProps) {
       {/* Export Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-xl gradient-secondary px-4 py-2.5 text-sm font-bold text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105"
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-purple-700"
       >
         <Download className="h-4 w-4" />
-        Export & Share
+        Export
       </button>
 
       {/* Dropdown Menu */}
@@ -108,17 +110,23 @@ export function ExportMenu({ trip, cards }: ExportMenuProps) {
                 {/* Export PDF */}
                 <button
                   onClick={handleExportPDF}
-                  disabled={loading === 'pdf'}
+                  disabled={loading === 'pdf' || !hasPlaces}
                   className={cn(
                     'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all duration-200',
-                    'hover:bg-accent',
+                    hasPlaces ? 'hover:bg-accent' : 'opacity-50 cursor-not-allowed',
                     loading === 'pdf' && 'opacity-50 cursor-not-allowed'
                   )}
                 >
                   <FileText className="h-5 w-5 text-red-500" />
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-foreground">Export as PDF</p>
-                    <p className="text-xs text-muted-foreground">Beautiful printable itinerary</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {loading === 'pdf' ? 'Building your guide...' : 'Download Trip Guide (PDF)'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {hasPlaces
+                        ? 'Maps, day-by-day plan, QR links and videos'
+                        : 'Add places to your board first'}
+                    </p>
                   </div>
                 </button>
 

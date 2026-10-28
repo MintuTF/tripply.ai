@@ -24,6 +24,9 @@ import { AD_SLOTS } from '@/lib/adsense/config';
 import type { TravelPlace, CityData } from '@/lib/travel/types';
 import { cn } from '@/lib/utils';
 
+const MAPBOX_TOKEN =
+  process.env.NEXT_PUBLIC_MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+
 interface PlaceDetailDrawerProps {
   place: TravelPlace | null;
   city: CityData | null;
@@ -196,7 +199,7 @@ export function PlaceDetailDrawer({
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
                 {/* Close button */}
-                <button
+                <button aria-label="Close"
                   onClick={onClose}
                   className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors"
                 >
@@ -205,7 +208,7 @@ export function PlaceDetailDrawer({
 
                 {/* Save and Share buttons */}
                 <div className="absolute top-4 left-4 flex gap-2">
-                  <button
+                  <button aria-label={isSaved ? 'Remove from saved places' : 'Save place'}
                     onClick={handleSaveToggle}
                     className={cn(
                       'w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-colors',
@@ -272,24 +275,28 @@ export function PlaceDetailDrawer({
 
                 {/* Mini Map */}
                 {place.coordinates && (
-                  <div
+                  <button
+                    type="button"
                     onClick={onShowOnMap}
-                    className="relative h-32 rounded-xl overflow-hidden cursor-pointer group"
+                    aria-label={`Show ${place.name} on the map`}
+                    className="relative block w-full h-32 rounded-xl overflow-hidden cursor-pointer group bg-gradient-to-br from-purple-100 to-pink-100"
                   >
-                    <img
-                      src={`https://api.mapbox.com/styles/v1/mapbox/light-v11/static/pin-l+8B5CF6(${place.coordinates.lng},${place.coordinates.lat})/${place.coordinates.lng},${place.coordinates.lat},14,0/400x150@2x?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''}`}
-                      alt="Location map"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                      <span className="opacity-0 group-hover:opacity-100 text-white bg-purple-600 px-3 py-1.5 rounded-full text-sm font-medium transition-opacity">
-                        View on Map
-                      </span>
-                    </div>
-                  </div>
+                    {MAPBOX_TOKEN ? (
+                      <img
+                        src={`https://api.mapbox.com/styles/v1/mapbox/light-v11/static/pin-l+8B5CF6(${place.coordinates.lng},${place.coordinates.lat})/${place.coordinates.lng},${place.coordinates.lat},14,0/400x150@2x?access_token=${MAPBOX_TOKEN}`}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <MapPin className="absolute inset-0 m-auto w-8 h-8 text-purple-400" aria-hidden="true" />
+                    )}
+                    <span className="absolute bottom-2 right-2 text-white bg-purple-600 group-hover:bg-purple-700 px-3 py-1.5 rounded-full text-sm font-medium shadow transition-colors">
+                      View on Map
+                    </span>
+                  </button>
                 )}
 
                 {/* AI Why This Fits - Shortened to max 3 bullets */}
@@ -354,7 +361,7 @@ export function PlaceDetailDrawer({
                     <Navigation className="w-4 h-4" />
                     <span>Show on Map</span>
                   </button>
-                  <button
+                  <button aria-label={isSaved ? 'Remove from saved places' : 'Save place'}
                     onClick={handleSaveToggle}
                     className={cn(
                       'flex items-center justify-center gap-2 px-4 py-3 rounded-xl border font-medium transition-colors',

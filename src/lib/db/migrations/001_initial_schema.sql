@@ -1,4 +1,4 @@
--- Voyagr Database Schema
+-- Tripply Database Schema
 -- Initial Migration: Core Tables
 
 -- Enable UUID extension

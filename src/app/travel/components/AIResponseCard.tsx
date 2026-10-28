@@ -55,7 +55,7 @@ function RecommendationItem({
           )}
         </div>
         {place?.imageUrl && (
-          <img
+          <img loading="lazy" decoding="async"
             src={place.imageUrl}
             alt={item.placeName || item.headline}
             className="w-12 h-12 rounded-lg object-cover flex-shrink-0"

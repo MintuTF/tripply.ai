@@ -321,7 +321,7 @@ export default function TripPage({ params }: PageProps) {
   const handleArchive = async () => {
     await handleTripUpdate({ status: 'archived' });
     setToastMessage('Trip archived');
-    router.push('/my-trips');
+    router.push('/trips');
   };
 
   const handleEditTrip = async (tripData: CreateTripData) => {

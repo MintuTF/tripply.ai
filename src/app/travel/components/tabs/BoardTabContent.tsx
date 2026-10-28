@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { LayoutDashboard, Share2 } from 'lucide-react';
 import { useTravel } from '../../context/TravelContext';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { useTripContext } from '@/context/TripContext';
 import { TripBoard } from '@/components/board/TripBoard';
 import { ExportMenu } from '@/components/trip/ExportMenu';
 import { ShareTripModal } from '@/components/trip/ShareTripModal';
@@ -14,6 +15,10 @@ export function BoardTabContent() {
   const { state, dispatch } = useTravel();
   const { draftTrip, draftCards, city, currentTripId, boardRefreshTrigger } = state;
   const { user } = useAuth();
+  // Shop items live in the trip store (not the travel draft), so the board reads them from there too
+  const { cards: tripStoreCards, updateCard: updateTripStoreCard, deleteCard: deleteTripStoreCard } = useTripContext();
+  const shoppingCards = (tripStoreCards || []).filter((c) => c.type === 'product');
+  const shoppingIds = new Set(shoppingCards.map((c) => c.id));
   const router = useRouter();
   const params = useParams();
   const citySlug = params?.citySlug as string;
@@ -124,7 +129,7 @@ export function BoardTabContent() {
   // Use tripData if we have a saved trip, otherwise use draft data
   const cards: Card[] = tripData
     ? tripData.cards
-    : draftCards.map(dc => ({
+    : [...draftCards.map(dc => ({
         id: dc.id,
         trip_id: 'draft',
         type: dc.type,
@@ -136,7 +141,7 @@ export function BoardTabContent() {
         favorite: false,
         created_at: new Date(dc.addedAt).toISOString(),
         updated_at: new Date(dc.addedAt).toISOString(),
-      }));
+      })), ...shoppingCards];
 
   const trip: Trip = tripData
     ? tripData.trip
@@ -160,55 +165,10 @@ export function BoardTabContent() {
         updated_at: new Date(draftTrip!.createdAt).toISOString(),
       };
 
-  const formatDateRange = (startDate: string, endDate?: string) => {
-    const start = new Date(startDate);
-    const end = endDate ? new Date(endDate) : null;
-
-    if (!end) return start.toLocaleDateString();
-
-    return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
-  };
-
-
   return (
     <div className="relative">
-      {/* Header */}
-      <div className="sticky top-16 z-20 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-purple-100 dark:border-purple-900 px-4 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">{trip.title}</h2>
-              {state.currentTripId && (
-                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                  Saved
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {cards.length} {cards.length === 1 ? 'place' : 'places'} added
-              {trip.dates && ` • ${formatDateRange(trip.dates.start, trip.dates.end)}`}
-            </p>
-          </div>
-
-          {/* Export & Share Actions */}
-          <div className="flex items-center gap-2">
-            {/* Share Button - Only for saved trips */}
-            {currentTripId && currentTripId !== 'draft' && (
-              <button
-                onClick={() => setShowShareModal(true)}
-                className="flex items-center gap-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-              >
-                <Share2 className="h-4 w-4" />
-                Share
-              </button>
-            )}
-            <ExportMenu trip={trip} cards={cards} />
-          </div>
-        </div>
-      </div>
-
       {/* Trip Board */}
-      <div className="h-[calc(100vh-180px)]">
+      <div className="h-[calc(100vh-4rem)] min-h-[480px]">
         <TripBoard
           tripId={currentTripId || "draft"}
           trip={trip}
@@ -232,6 +192,9 @@ export function BoardTabContent() {
                 console.error('Failed to update card:', error);
                 loadTripData(); // Reload on error
               }
+            } else if (shoppingIds.has(cardId)) {
+              const existing = shoppingCards.find((c) => c.id === cardId);
+              if (existing) updateTripStoreCard({ ...existing, ...updates } as Card);
             } else {
               // Fallback for draft mode
               dispatch({
@@ -257,6 +220,8 @@ export function BoardTabContent() {
                 console.error('Failed to delete card:', error);
                 loadTripData(); // Reload on error
               }
+            } else if (shoppingIds.has(cardId)) {
+              deleteTripStoreCard(cardId);
             } else {
               // Fallback for draft mode
               dispatch({
@@ -270,6 +235,20 @@ export function BoardTabContent() {
             navigateToExplore();
           }}
           isLoggedOut={true}
+          headerActions={
+            <>
+              {currentTripId && currentTripId !== 'draft' && (
+                <button
+                  onClick={() => setShowShareModal(true)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:border-purple-300 hover:text-purple-700"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share
+                </button>
+              )}
+              <ExportMenu trip={trip} cards={cards} />
+            </>
+          }
         />
       </div>
 

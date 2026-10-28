@@ -832,13 +832,13 @@ function PlayingVideoSection({
 
           {/* Top-right: Controls */}
           <div className="absolute top-3 right-3 flex items-center gap-2">
-            <button
+            <button aria-label="Toggle sound"
               onClick={onMuteToggle}
               className="p-2 rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition-colors text-white"
             >
               {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </button>
-            <button
+            <button aria-label="Close video"
               onClick={onClose}
               className="p-2 rounded-full bg-pink-500 hover:bg-pink-600 transition-colors text-white"
             >

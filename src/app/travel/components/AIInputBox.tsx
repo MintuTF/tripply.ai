@@ -73,7 +73,7 @@ export function AIInputBox({
         />
 
         {/* Send button */}
-        <motion.button
+        <motion.button aria-label="Send message"
           onClick={handleSubmit}
           disabled={!message.trim() || isLoading || disabled}
           whileHover={{ scale: 1.05 }}

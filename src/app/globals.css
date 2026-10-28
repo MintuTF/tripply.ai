@@ -852,3 +852,14 @@
     top: 48px; /* Consistent compact height on mobile (reduced from 64px) */
   }
 }
+
+/* Map popup used by the itinerary map view */
+.itinerary-popup .maplibregl-popup-content {
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+}
+.itinerary-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: #fff;
+}

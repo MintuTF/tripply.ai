@@ -165,7 +165,7 @@ export function PlaceLinkPopover({ query, children, onAddToShortlist }: PlaceLin
               {/* Image */}
               {photoUrl ? (
                 <div className="relative h-32 w-full overflow-hidden">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={photoUrl}
                     alt={placeCard.name}
                     className="h-full w-full object-cover"
@@ -220,7 +220,7 @@ export function PlaceLinkPopover({ query, children, onAddToShortlist }: PlaceLin
                 {/* Actions */}
                 <div className="flex gap-2 pt-1">
                   {onAddToShortlist && (
-                    <button
+                    <button aria-label="Add to shortlist"
                       onClick={handleAddToShortlist}
                       disabled={isAdded}
                       className={cn(

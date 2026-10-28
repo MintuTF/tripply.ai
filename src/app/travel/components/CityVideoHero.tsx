@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { YouTubeVideo } from '@/types/video';
+import { fetchJsonOnce } from '@/lib/utils/fetchOnce';
 
 interface CityVideoHeroProps {
   cityName: string;
@@ -38,15 +39,11 @@ export function CityVideoHero({
       }
 
       try {
-        const response = await fetch(
+        const data = await fetchJsonOnce<{ videos?: YouTubeVideo[] }>(
           `/api/travel/videos?type=city&name=${encodeURIComponent(cityName)}&id=${encodeURIComponent(cityId)}`
         );
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.videos && data.videos.length > 0) {
-            setVideos(data.videos);
-          }
+        if (data.videos && data.videos.length > 0) {
+          setVideos(data.videos);
         }
       } catch (error) {
         console.error('Failed to fetch city videos:', error);

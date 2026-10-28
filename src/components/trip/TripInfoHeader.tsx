@@ -1,18 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Trip, TripStatus } from '@/types';
 import { cn } from '@/lib/utils';
-import {
-  Calendar,
-  Users,
-  ChevronDown,
-  Check,
-  Archive,
-  MapPin,
-  Plane
-} from 'lucide-react';
+import { ChevronDown, Check, Archive } from 'lucide-react';
 import { format, isAfter, isBefore } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,6 +14,10 @@ interface TripInfoHeaderProps {
   onArchive?: () => void;
   isDraft?: boolean;
   isLoggedOut?: boolean;
+  /** Short counts line, e.g. "6 places · 1 shop item" */
+  summary?: string;
+  /** Tools shown on the right (search, add, export...) */
+  actions?: ReactNode;
 }
 
 const DRAFT_STATUS = {
@@ -72,7 +68,7 @@ function calculateEffectiveStatus(trip: Trip): TripStatus {
   return 'planning';
 }
 
-export function TripInfoHeader({ trip, onTripUpdate, onArchive, isDraft, isLoggedOut }: TripInfoHeaderProps) {
+export function TripInfoHeader({ trip, onTripUpdate, onArchive, isDraft, isLoggedOut, summary, actions }: TripInfoHeaderProps) {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -122,6 +118,7 @@ export function TripInfoHeader({ trip, onTripUpdate, onArchive, isDraft, isLogge
   };
 
   const formatDateRange = () => {
+    if (!trip.dates?.start || !trip.dates?.end) return '';
     const start = new Date(trip.dates.start);
     const end = new Date(trip.dates.end);
 
@@ -136,95 +133,52 @@ export function TripInfoHeader({ trip, onTripUpdate, onArchive, isDraft, isLogge
     return adults + children + infants;
   };
 
+  const travelers = getTotalTravelers();
+  const meta = [
+    summary,
+    trip.destination?.name,
+    !isLoggedOut ? formatDateRange() : '',
+    !isLoggedOut ? `${travelers} ${travelers === 1 ? 'traveler' : 'travelers'}` : '',
+  ].filter(Boolean);
+
+  const chipBase = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium';
+
   return (
-    <div className="bg-white/60 backdrop-blur-md border-b border-purple-100/50 px-6 py-4">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        {/* Left side - Trip info */}
-        <div className="flex items-center gap-4 flex-wrap">
-          {/* Trip icon */}
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg shadow-purple-200">
-            <Plane className="h-5 w-5 text-white" />
-          </div>
-
-          {/* Trip title - static display */}
+    <div className="relative z-30 border-b border-gray-200/70 bg-white/80 px-4 py-3 backdrop-blur-md sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        {/* Left: name, status, one line of facts */}
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xl font-bold">{trip.title}</span>
+            <h1 className="truncate text-lg font-semibold text-gray-900">{trip.title}</h1>
+
+            {isDraft ? (
+              <span className={cn(chipBase, 'bg-purple-50 text-purple-700')}>{DRAFT_STATUS.label}</span>
+            ) : (
+              <div className="relative" ref={statusDropdownRef}>
+                <button
+                  ref={buttonRef}
+                  onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                  className={cn(chipBase, 'transition-shadow hover:shadow-sm', statusConfig.bgColor, statusConfig.color)}
+                >
+                  {effectiveStatus === 'completed' && <Check className="h-3 w-3" />}
+                  {statusConfig.label}
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </div>
+            )}
           </div>
-
-          {/* Status badge - static for draft, dropdown for saved trips */}
-          {isDraft ? (
-            <div
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium',
-                DRAFT_STATUS.bgColor,
-                DRAFT_STATUS.color
-              )}
-            >
-              {DRAFT_STATUS.label}
-            </div>
-          ) : (
-            <div className="relative" ref={statusDropdownRef}>
-              <button
-                ref={buttonRef}
-                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium',
-                  'transition-all duration-200 hover:shadow-md',
-                  statusConfig.bgColor,
-                  statusConfig.color
-                )}
-              >
-                {effectiveStatus === 'completed' && <Check className="h-3.5 w-3.5" />}
-                {statusConfig.label}
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-
-            </div>
-          )}
+          {meta.length > 0 && <p className="mt-0.5 truncate text-xs text-gray-500">{meta.join(' · ')}</p>}
         </div>
 
-        {/* Right side - Date and actions */}
-        <div className="flex items-center gap-4 flex-wrap">
-          {/* Destination (if set) */}
-          {trip.destination?.name && (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <MapPin className="h-4 w-4" />
-              <span>{trip.destination.name}</span>
-            </div>
-          )}
-
-          {/* Date range - read-only display (hidden for logged-out users) */}
-          {!isLoggedOut && (
-            <div
-              className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-lg',
-                'border border-purple-100 bg-white/60 backdrop-blur-sm',
-                'text-sm font-medium'
-              )}
-            >
-              <Calendar className="h-4 w-4 text-purple-500" />
-              {formatDateRange()}
-            </div>
-          )}
-
-          {/* Travelers count (hidden for logged-out users) */}
-          {!isLoggedOut && (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Users className="h-4 w-4" />
-              <span>{getTotalTravelers()} travelers</span>
-            </div>
-          )}
-
-          {/* Archive button */}
+        {/* Right: tools */}
+        <div className="flex flex-wrap items-center gap-2">
+          {actions}
           {onArchive && effectiveStatus !== 'archived' && (
             <button
               onClick={onArchive}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
-                'text-sm font-medium text-muted-foreground',
-                'hover:bg-accent/50 transition-colors'
-              )}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
               title="Archive trip"
+              aria-label="Archive trip"
             >
               <Archive className="h-4 w-4" />
             </button>

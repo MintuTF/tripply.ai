@@ -179,7 +179,7 @@ export function ShareButton({
                   readOnly
                   className="flex-1 px-4 py-3 rounded-xl bg-gray-100 text-sm text-gray-700 truncate"
                 />
-                <button
+                <button aria-label="Copy link"
                   onClick={handleCopy}
                   className={cn(
                     'px-4 py-3 rounded-xl font-medium transition-colors flex items-center gap-2',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetTier, ProductCategory } from '@/types/marketplace';
 import { CATEGORIES } from '@/lib/marketplace/categories';
 import { Search, X, Filter } from 'lucide-react';
@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FilterBarProps {
+  /** Number of products per category in the current results; categories with none are hidden */
+  categoryCounts?: Partial<Record<ProductCategory, number>>;
   onFiltersChange: (filters: {
     budgetTier?: BudgetTier;
     categories?: ProductCategory[];
@@ -20,7 +22,7 @@ interface FilterBarProps {
   };
 }
 
-export function FilterBar({ onFiltersChange, initialFilters }: FilterBarProps) {
+export function FilterBar({ onFiltersChange, initialFilters, categoryCounts }: FilterBarProps) {
   const [budgetTier, setBudgetTier] = useState<BudgetTier | undefined>(
     initialFilters?.budgetTier
   );
@@ -29,6 +31,26 @@ export function FilterBar({ onFiltersChange, initialFilters }: FilterBarProps) {
   );
   const [searchQuery, setSearchQuery] = useState(initialFilters?.searchQuery || '');
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+
+  // The page can clear all filters on its own (the "Clear Filters" button in the empty state).
+  // When its filters go from active to empty, mirror that here so the search box and chips
+  // don't keep showing stale values. Only that transition counts: the page's filters also read
+  // as empty while the user is mid-typing, before the debounce has reported the text.
+  const parentHasFilters = !!(
+    initialFilters?.budgetTier ||
+    initialFilters?.categories?.length ||
+    initialFilters?.searchQuery
+  );
+  const parentHadFilters = useRef(parentHasFilters);
+  useEffect(() => {
+    if (parentHadFilters.current && !parentHasFilters) {
+      setBudgetTier(undefined);
+      setSelectedCategories([]);
+      setSearchQuery('');
+      setDebouncedSearch('');
+    }
+    parentHadFilters.current = parentHasFilters;
+  }, [parentHasFilters]);
 
   // Debounced search effect
   useEffect(() => {
@@ -98,6 +120,7 @@ export function FilterBar({ onFiltersChange, initialFilters }: FilterBarProps) {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 onClick={() => handleSearchChange('')}
+                aria-label="Clear search"
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <X className="h-3 w-3" />
@@ -114,13 +137,14 @@ export function FilterBar({ onFiltersChange, initialFilters }: FilterBarProps) {
                   key={tier}
                   onClick={() => handleBudgetChange(budgetTier === tier ? undefined : tier)}
                   className={cn(
-                    'w-8 h-8 rounded-full text-base flex items-center justify-center transition-all',
+                    'w-9 h-9 rounded-full text-base flex items-center justify-center transition-all',
                     isSelected
                       ? 'bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-200 shadow-sm ring-2 ring-purple-200'
                       : 'bg-gray-50 border border-gray-200 hover:border-purple-200 hover:bg-purple-50'
                   )}
                   title={label}
                   aria-label={label}
+                  aria-pressed={isSelected}
                 >
                   {icon}
                 </button>
@@ -135,9 +159,11 @@ export function FilterBar({ onFiltersChange, initialFilters }: FilterBarProps) {
             className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs max-w-[140px] transition-all focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
           >
             <option value="">All Categories</option>
-            {CATEGORIES.map((cat) => (
+            {CATEGORIES.filter(
+              (cat) => !categoryCounts || (categoryCounts[cat.id] ?? 0) > 0 || selectedCategories.includes(cat.id)
+            ).map((cat) => (
               <option key={cat.id} value={cat.id}>
-                {cat.name}
+                {categoryCounts ? `${cat.name} (${categoryCounts[cat.id] ?? 0})` : cat.name}
               </option>
             ))}
           </select>

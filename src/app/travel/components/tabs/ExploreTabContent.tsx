@@ -14,10 +14,11 @@ import { PlaceSearchModal } from '@/components/search/PlaceSearchModal';
 import { SavePlaceHint } from '@/components/onboarding/SavePlaceHint';
 import { AdSlot } from '@/components/ads/AdSlot';
 import { AD_SLOTS } from '@/lib/adsense/config';
-import type { PlaceResult, TravelPlace } from '@/lib/travel/types';
+import type { TravelPlace } from '@/lib/travel/types';
+import type { PlaceResult } from '@/types';
 
 export function ExploreTabContent() {
-  const { state, dispatch, selectPlace, savePlace } = useTravel();
+  const { state, dispatch, selectPlace, savePlace, addToTrip } = useTravel();
   const { city, categorizedPlaces, quickFilter, places, aiSession, cityLoading, placesLoading } = state;
   const [showPlaceSearch, setShowPlaceSearch] = useState(false);
 
@@ -190,8 +191,9 @@ export function ExploreTabContent() {
             priceLevel: place.price_level,
           };
 
-          // Save the place
+          // Save the place and put it on the trip board
           savePlace(travelPlace.id);
+          addToTrip(travelPlace, cardType);
 
           // Open the detail drawer for this place
           selectPlace(travelPlace);

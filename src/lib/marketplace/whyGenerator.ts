@@ -111,7 +111,7 @@ export function generateSmartBadges(
 
   // Best seller badge
   if ((product.reviewCount || 0) >= 10000) {
-    badges.push('⭐ Best seller');
+    badges.push('⭐ 10k+ reviews');
   }
 
   // Limit to 2 badges max
@@ -235,8 +235,8 @@ const WHY_TEMPLATES: WhyTemplate[] = [
       p.category === 'electronics' &&
       p.name.toLowerCase().includes('adapter'),
     bullets: (p, ctx) => [
-      '86% of travelers forget to check plug compatibility',
-      `Essential for staying connected in ${ctx.destination || 'your destination'}`,
+      'Plug types differ by country, so check compatibility before you fly',
+      `Helps you stay connected in ${ctx.destination || 'your destination'}`,
     ],
   },
   {
@@ -292,7 +292,7 @@ function getFallbackBullets(product: Product, context: MarketplaceTripContext): 
 
   // Add rating-based bullet
   if (product.rating && product.rating >= 4.5) {
-    bullets.push(`Highly rated by ${formatNumber(product.reviewCount || 0)} travelers`);
+    bullets.push(`Rated ${(product.rating || 0).toFixed(1)} by ${formatNumber(product.reviewCount || 0)} Amazon reviewers`);
   }
 
   // Add category-specific bullet

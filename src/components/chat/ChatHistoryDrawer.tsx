@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatConversation, ChatMode } from '@/types';
+import { SignInModal } from '@/components/auth/SignInModal';
 
 // Guest conversation type (matches ChatHistoryContext)
 interface GuestConversation {
@@ -54,6 +55,7 @@ export function ChatHistoryDrawer({
   onDeleteGuestConversation,
 }: ChatHistoryDrawerProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showSignIn, setShowSignIn] = useState(false);
 
   // Use guest conversations if in guest mode
   const displayConversations = isGuest ? guestConversations : conversations;
@@ -112,7 +114,7 @@ export function ChatHistoryDrawer({
                 <MessageSquare className="w-5 h-5 text-purple-500" />
                 Chat History
               </h2>
-              <button
+              <button aria-label="Close chat history"
                 onClick={onClose}
                 className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
@@ -159,13 +161,14 @@ export function ChatHistoryDrawer({
                     </p>
                   </div>
                 </div>
-                <a
-                  href="/auth/login"
+                <button
+                  type="button"
+                  onClick={() => setShowSignIn(true)}
                   className="flex items-center justify-center gap-2 w-full mt-2 py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors"
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   Sign In
-                </a>
+                </button>
               </div>
             )}
 
@@ -179,6 +182,7 @@ export function ChatHistoryDrawer({
               </p>
             </div>
           </motion.div>
+          <SignInModal isOpen={showSignIn} onClose={() => setShowSignIn(false)} />
         </>
       )}
     </AnimatePresence>
@@ -246,7 +250,7 @@ function ConversationItem({
         </div>
 
         {/* Delete button */}
-        <button
+        <button aria-label="Delete conversation"
           onClick={onDelete}
           className={cn(
             'p-1.5 rounded-lg opacity-0 group-hover:opacity-100',
@@ -290,6 +294,7 @@ function ModeBadge({ mode }: { mode: ChatMode }) {
 }
 
 function EmptyState({ isGuest = false }: { isGuest?: boolean }) {
+  const [showSignIn, setShowSignIn] = useState(false);
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
       <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
@@ -305,14 +310,16 @@ function EmptyState({ isGuest = false }: { isGuest?: boolean }) {
         }
       </p>
       {isGuest && (
-        <a
-          href="/auth/login"
+        <button
+          type="button"
+          onClick={() => setShowSignIn(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors"
         >
           <LogIn className="w-4 h-4" />
           Sign in for unlimited chats
-        </a>
+        </button>
       )}
+      <SignInModal isOpen={showSignIn} onClose={() => setShowSignIn(false)} />
     </div>
   );
 }

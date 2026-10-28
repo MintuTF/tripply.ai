@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 interface SignInModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Called by "Continue without saving"; defaults to onClose */
+  onSkip?: () => void;
   title?: string;
   description?: string;
 }
@@ -16,6 +18,7 @@ interface SignInModalProps {
 export function SignInModal({
   isOpen,
   onClose,
+  onSkip,
   title = 'Sign in to Tripply',
   description = 'Save your trips and access them from anywhere.',
 }: SignInModalProps) {
@@ -334,7 +337,7 @@ export function SignInModal({
 
               {/* Continue as guest */}
               <button
-                onClick={onClose}
+                onClick={onSkip ?? onClose}
                 className="w-full mt-4 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 Continue without saving

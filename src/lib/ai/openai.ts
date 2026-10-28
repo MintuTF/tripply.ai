@@ -5,8 +5,9 @@ export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Default model for chat completions
-export const DEFAULT_MODEL = 'gpt-4-turbo-preview';
+// Default model for chat completions. gpt-4o-mini is ~15x cheaper than gpt-4o and handles tool-calling
+// travel Q&A well; set OPENAI_CHAT_MODEL=gpt-4o to trade cost for quality.
+export const DEFAULT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
 
 // System prompt for Tripply
 export const SYSTEM_PROMPT = `You are Tripply, an AI travel research assistant. Your role is to help users plan their trips by:

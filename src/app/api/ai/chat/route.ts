@@ -77,7 +77,7 @@ When suggesting places or activities, include practical details like approximate
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-4o',
       max_tokens: 1024,
       temperature: 0.7,
       messages: [

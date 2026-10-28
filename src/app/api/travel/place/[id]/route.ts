@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { placePhotoUrl } from '@/lib/places/photo';
 
 export interface PlaceDetails {
   id: string;
@@ -48,7 +49,7 @@ export async function GET(
   // Check cache
   const cached = detailsCache.get(id);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return NextResponse.json({ place: cached.data, cached: true });
+    return NextResponse.json({ place: cached.data, cached: true }, { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } });
   }
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
@@ -96,7 +97,7 @@ export async function GET(
 
     // Build photo URLs
     const photos = (place.photos || []).slice(0, 10).map((photo: any) =>
-      `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photo.photo_reference}&key=${apiKey}`
+      placePhotoUrl(photo.photo_reference, 800)
     );
 
     // Normalize reviews
@@ -133,7 +134,7 @@ export async function GET(
     // Cache the result
     detailsCache.set(id, { data: placeDetails, timestamp: Date.now() });
 
-    return NextResponse.json({ place: placeDetails });
+    return NextResponse.json({ place: placeDetails }, { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } });
   } catch (error) {
     console.error('Failed to fetch place details:', error);
     return NextResponse.json(

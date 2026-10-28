@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
 import { Card, Trip, CardType } from '@/types';
 import { CardList } from './CardList';
 import { KanbanColumn } from './KanbanColumn';
@@ -10,8 +10,9 @@ import { CardDetailPanel } from './CardDetailPanel';
 import { BudgetWidget } from '@/components/budget/BudgetWidget';
 import { BudgetBreakdown } from '@/components/budget/BudgetBreakdown';
 import { ResultCard } from '@/components/cards/ResultCard';
+import { ConfirmedMapView } from './itinerary/ConfirmedMapView';
 import { cn } from '@/lib/utils';
-import { Search, Grid, List, LayoutGrid, Calendar, Wallet, Hotel, Utensils, Compass, Sparkles, Plus } from 'lucide-react';
+import { Search, Grid, List, LayoutGrid, Calendar, Wallet, Hotel, Utensils, Compass, Sparkles, Plus, ShoppingBag, Map as MapIcon } from 'lucide-react';
 import { TripInfoHeader } from '@/components/trip/TripInfoHeader';
 import { PlaceSearchModal } from '@/components/search/PlaceSearchModal';
 import type { PlaceResult } from '@/types';
@@ -41,14 +42,15 @@ interface TripBoardProps {
   isLoggedOut?: boolean;
   onAddCard?: (card: Card) => void;  // For local card adding (guest mode)
   onSaveRequired?: () => void;  // Called when action requires saved trip (e.g., confirming cards)
+  headerActions?: ReactNode;  // Extra buttons for the header (export, share)
 }
 
 /**
  * TripBoard - Kanban-style board for organizing saved cards
  * Inspired by Notion and Linear's card organization
  */
-export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete, onCardDuplicate, onTripUpdate, onArchive, isLoggedOut, onAddCard, onSaveRequired }: TripBoardProps) {
-  const [viewMode, setViewMode] = useState<'kanban' | 'grid' | 'list' | 'itinerary' | 'budget'>('kanban');
+export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete, onCardDuplicate, onTripUpdate, onArchive, isLoggedOut, onAddCard, onSaveRequired, headerActions }: TripBoardProps) {
+  const [viewMode, setViewMode] = useState<'kanban' | 'grid' | 'list' | 'itinerary' | 'budget' | 'map'>('kanban');
   const [totalBudget, setTotalBudget] = useState<number | undefined>(trip.budget_range ? trip.budget_range[1] : undefined);
   const [searchQuery, setSearchQuery] = useState('');
   const [scheduleModalCard, setScheduleModalCard] = useState<Card | null>(null);
@@ -97,6 +99,7 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
     { id: 'hotel' as CardType, label: 'Hotels', icon: Hotel, color: 'purple', gradient: 'from-purple-500/10 to-purple-600/5' },
     { id: 'food' as CardType, label: 'Restaurants', icon: Utensils, color: 'pink', gradient: 'from-pink-500/10 to-pink-600/5' },
     { id: 'spot' as CardType, label: 'Things to Do', icon: Compass, color: 'violet', gradient: 'from-violet-500/10 to-violet-600/5' },
+    { id: 'product' as CardType, label: 'Shopping list', icon: ShoppingBag, color: 'amber', gradient: 'from-amber-500/10 to-amber-600/5' },
   ];
 
   // Filter and organize cards
@@ -117,7 +120,9 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
         if (searchQuery) {
           const payload = typeof card.payload_json === 'string' ? JSON.parse(card.payload_json) : card.payload_json;
           const name = payload.name || payload.title || '';
-          if (!name.toLowerCase().includes(searchQuery.toLowerCase())) {
+          // Ignore accents so "belem" finds "Belém"
+          const fold = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+          if (!fold(name).includes(fold(searchQuery))) {
             return false;
           }
         }
@@ -125,6 +130,17 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
         return true;
       });
   }, [cards, searchQuery]);
+
+  // "6 places · 1 shop item" (or "2 of 6 places" while searching)
+  const boardSummary = useMemo(() => {
+    const shop = cards.filter((c) => c.type === 'product').length;
+    const places = cards.length - shop;
+    const shownPlaces = filteredCards.filter((c) => c.type !== 'product').length;
+    const placesText = searchQuery
+      ? `${shownPlaces} of ${places} places`
+      : `${places} ${places === 1 ? 'place' : 'places'}`;
+    return [placesText, shop > 0 ? `${shop} shop ${shop === 1 ? 'item' : 'items'}` : ''].filter(Boolean).join(' · ');
+  }, [cards, filteredCards, searchQuery]);
 
   // Group cards by column (for flat kanban view - kept for reference)
   const cardsByColumn = useMemo(() => {
@@ -166,7 +182,8 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
     // Then group by category within each column AND sort by order
     columns.forEach((col) => {
       categories.forEach((cat) => {
-        result[col.id][cat.id] = (columnCards[col.id]?.filter((card) => card.type === cat.id) || [])
+        // 'activity' cards (parks, aquariums, churches...) belong with Things to Do; without this they were counted but never shown
+        result[col.id][cat.id] = (columnCards[col.id]?.filter((card) => card.type === cat.id || (cat.id === 'spot' && card.type === 'activity')) || [])
           .sort((a, b) => (a.order || 0) - (b.order || 0));
       });
     });
@@ -227,12 +244,6 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
 
     // Check if dropping on a day section (for scheduling cards in booked column)
     if (overId.startsWith('day-section-')) {
-      // Check if trip is draft before assigning to day + confirmed
-      if (tripId === 'draft' && onSaveRequired) {
-        onSaveRequired();
-        return;
-      }
-
       const dayNumber = parseInt(overId.replace('day-section-', ''));
 
       if (onCardUpdate) {
@@ -278,6 +289,14 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
     if (sourceColumnId === targetColumnId && !overId.startsWith('column-')) {
       const overCard = filteredCards.find(c => c.id === overId);
 
+      // Confirmed column is grouped by day: dropping on a card of another day moves the card to that day
+      if (sourceColumnId === 'confirmed' && overCard && (overCard.day || 0) !== (draggedCard.day || 0)) {
+        if (onCardUpdate) {
+          onCardUpdate(draggedCard.id, { day: overCard.day, order: overCard.order ?? 0 });
+        }
+        return;
+      }
+
       // Only reorder if dragging within same category (hotel→hotel, food→food, etc.)
       if (overCard && draggedCard.type === overCard.type) {
         // Get cards of the same type in this column
@@ -303,14 +322,6 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
     }
     // Different column - move card to new column
     else if (sourceColumnId !== targetColumnId) {
-      // Check if trying to move to confirmed column with unsaved trip
-      if (targetColumnId === 'confirmed' && tripId === 'draft') {
-        if (onSaveRequired) {
-          onSaveRequired();
-        }
-        return; // Block the move until trip is saved
-      }
-
       // Remove old column label and add new one
       const columnIds = ['considering', 'shortlist', 'confirmed', 'dismissed'];
       const newLabels = (draggedCard.labels || []).filter(l => !columnIds.includes(l));
@@ -328,8 +339,12 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
         }
       }
 
+      // Dropped onto a card inside a day of the Confirmed column: join that day
+      const dropCard = overId.startsWith('column-') ? undefined : filteredCards.find((c) => c.id === overId);
+      const joinDay = targetColumnId === 'confirmed' && dropCard?.day ? { day: dropCard.day } : {};
+
       if (onCardUpdate) {
-        onCardUpdate(draggedCard.id, { labels: newLabels, order: newOrder });
+        onCardUpdate(draggedCard.id, { labels: newLabels, order: newOrder, ...joinDay });
 
         // Reorder remaining cards in target column if dropped in middle
         if (newOrder < targetColumnCards.length) {
@@ -401,106 +416,129 @@ export function TripBoard({ tripId, trip, cards = [], onCardUpdate, onCardDelete
 
   return (
     <div className="flex h-full flex-col travel-gradient">
-      {/* Trip Info Header */}
+      {/* One compact header: trip info on the left, tools on the right */}
       <TripInfoHeader
         trip={trip}
         onTripUpdate={handleTripUpdate}
         onArchive={onArchive}
         isDraft={trip.id === 'draft'}
         isLoggedOut={isLoggedOut}
-      />
+        summary={boardSummary}
+        actions={
+          <>
+            {/* Board / Map switch */}
+            <div role="group" aria-label="Board view" className="inline-flex h-9 rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+              {([
+                ['kanban', 'Board', LayoutGrid],
+                ['map', 'Map', MapIcon],
+              ] as const).map(([mode, label, Icon]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  aria-pressed={viewMode === mode}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors',
+                    viewMode === mode ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
 
-      {/* Board Controls Header */}
-      <div className="border-b border-purple-100/50 bg-white/80 backdrop-blur-md px-6 py-3 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="rounded-full bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-1.5 text-sm font-semibold text-white shadow-lg shadow-purple-200">
-              {filteredCards.length} cards
-            </span>
-
-            {/* Add Place Button */}
-            <button
-              onClick={() => setShowPlaceSearch(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border-2 border-purple-200 text-purple-600 font-medium hover:border-purple-300 hover:shadow-lg hover:shadow-purple-100 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Place</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
             {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-purple-400" />
+            <div className={cn('relative', viewMode === 'map' && 'hidden')}>
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search cards..."
-                className="h-10 w-64 rounded-xl border border-purple-100 bg-white/60 backdrop-blur-sm pl-10 pr-4 text-sm transition-all duration-300 focus-visible:outline-none focus-visible:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-200"
+                placeholder="Search"
+                aria-label="Search cards"
+                className="h-9 w-32 rounded-lg border border-gray-200 bg-white pl-8 pr-3 text-sm transition-all focus-visible:w-48 focus-visible:outline-none focus-visible:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-100 sm:w-40 sm:focus-visible:w-56"
               />
             </div>
 
-            {/* View Mode - Hidden */}
-            <div className="hidden flex rounded-xl border border-purple-100 bg-white/60 backdrop-blur-sm overflow-hidden">
-              <button
-                onClick={() => setViewMode('kanban')}
-                className={cn(
-                  'px-3 py-2 transition-all duration-300',
-                  viewMode === 'kanban' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
-                )}
-                title="Kanban View"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('itinerary')}
-                className={cn(
-                  'border-x border-purple-100 px-3 py-2 transition-all duration-300',
-                  viewMode === 'itinerary' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
-                )}
-                title="Itinerary View"
-              >
-                <Calendar className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('budget')}
-                className={cn(
-                  'border-r border-purple-100 px-3 py-2 transition-all duration-300',
-                  viewMode === 'budget' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
-                )}
-                title="Budget View"
-              >
-                <Wallet className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={cn(
-                  'border-r border-purple-100 px-3 py-2 transition-all duration-300',
-                  viewMode === 'grid' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
-                )}
-                title="Grid View"
-              >
-                <Grid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={cn(
-                  'px-3 py-2 transition-all duration-300',
-                  viewMode === 'list' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
-                )}
-                title="List View"
-              >
-                <List className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+            <button
+              onClick={() => setShowPlaceSearch(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:border-purple-300 hover:text-purple-700"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add place</span>
+              <span className="sr-only sm:hidden">Add place</span>
+            </button>
+
+        {/* View Mode - Hidden */}
+        <div className="hidden flex rounded-xl border border-purple-100 bg-white/60 backdrop-blur-sm overflow-hidden">
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={cn(
+              'px-3 py-2 transition-all duration-300',
+              viewMode === 'kanban' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
+            )}
+            title="Kanban View"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('itinerary')}
+            className={cn(
+              'border-x border-purple-100 px-3 py-2 transition-all duration-300',
+              viewMode === 'itinerary' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
+            )}
+            title="Itinerary View"
+          >
+            <Calendar className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('budget')}
+            className={cn(
+              'border-r border-purple-100 px-3 py-2 transition-all duration-300',
+              viewMode === 'budget' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
+            )}
+            title="Budget View"
+          >
+            <Wallet className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('grid')}
+            className={cn(
+              'border-r border-purple-100 px-3 py-2 transition-all duration-300',
+              viewMode === 'grid' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
+            )}
+            title="Grid View"
+          >
+            <Grid className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={cn(
+              'px-3 py-2 transition-all duration-300',
+              viewMode === 'list' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200' : 'hover:bg-purple-50 text-gray-600'
+            )}
+            title="List View"
+          >
+            <List className="h-4 w-4" />
+          </button>
         </div>
-      </div>
+
+            {headerActions}
+          </>
+        }
+      />
 
       {/* Board Content */}
       <div className="flex-1 overflow-hidden">
-        {viewMode === 'budget' ? (
+        {viewMode === 'map' ? (
+          <ConfirmedMapView
+            cards={cards}
+            trip={trip}
+            onCardUpdate={onCardUpdate as unknown as (cardId: string, updates: Partial<Card>) => void}
+            onOpenCard={handleCardClick}
+          />
+        ) : viewMode === 'budget' ? (
           // Budget View
           <div className="h-full overflow-y-auto p-6">
             <div className="max-w-6xl mx-auto space-y-6">

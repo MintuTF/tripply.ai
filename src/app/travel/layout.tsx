@@ -1,7 +1,7 @@
 import { TravelProvider } from './context/TravelContext';
 
 export const metadata = {
-  title: 'Travel Research | Voyagr',
+  title: 'Travel Research',
   description: 'Discover and plan your next adventure with AI-powered travel recommendations',
 };
 

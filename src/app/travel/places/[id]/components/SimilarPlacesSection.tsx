@@ -23,7 +23,7 @@ function SimilarPlaceCard({
     >
       {/* Image */}
       <div className="relative h-36 bg-gradient-to-br from-purple-100 to-pink-100">
-        <img
+        <img loading="lazy" decoding="async"
           src={place.imageUrl}
           alt={place.name}
           className="w-full h-full object-cover"

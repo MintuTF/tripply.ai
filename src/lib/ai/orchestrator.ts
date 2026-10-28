@@ -1,4 +1,26 @@
 import { openai, DEFAULT_MODEL } from './openai';
+
+// Old assistant replies can be long; every turn re-sends them, so cap each one to keep input tokens flat
+const MAX_HISTORY_MESSAGE_CHARS = 1500;
+function clipHistoryText(text: string): string {
+  return text && text.length > MAX_HISTORY_MESSAGE_CHARS ? `${text.slice(0, MAX_HISTORY_MESSAGE_CHARS)}…` : text;
+}
+
+// Obvious "find me places" questions must show place cards. Smaller models sometimes skip the tool
+// even when told they must, so force it for these instead of relying on the prompt alone.
+const PLACE_INTENT =
+  /\b(restaurants?|food|eat(ing)?|dinner|lunch|breakfast|brunch|cafes?|coffee|bars?|pubs?|nightlife|clubs?|hotels?|hostels?|stay(ing)?|accommodations?|airbnb|attractions?|things to do|activities|museums?|sights?|sightseeing|hidden gems?|must[- ]see|where to (eat|stay|go|drink))\b/i;
+
+type ToolChoice = 'auto' | 'required' | { type: 'function'; function: { name: string } };
+
+function toolChoiceFor(userMessage: string, chatMode?: string): ToolChoice {
+  // An itinerary must be built from real places, so the model has to use its tools (it may call several)
+  if (chatMode === 'itinerary') return 'required';
+  if (PLACE_INTENT.test(userMessage)) {
+    return { type: 'function', function: { name: 'search_places' } };
+  }
+  return 'auto';
+}
 import { TOOLS, isValidToolCall } from './tools';
 import { getSystemPromptByMode, TripContext, CARD_WHY_INSTRUCTIONS } from './prompts';
 import { extractCardsFromToolResults } from './cardExtractor';
@@ -343,17 +365,29 @@ IMPORTANT FORMATTING RULES:
  * 3. Fetch transcripts and combine into context
  * 4. Generate natural conversational AI response
  */
+const SMART_VIDEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const smartVideoCache = new Map<string, { result: SmartVideoResult | null; at: number }>();
+
 export async function smartVideoSearch(
   userQuery: string,
   destination: string
 ): Promise<SmartVideoResult | null> {
   if (!destination) return null;
 
+  // The suggested-prompt chips are identical for every visitor, and each run costs YouTube quota plus
+  // several model calls, so repeat questions are served from memory for a day.
+  const cacheKey = `${destination.trim().toLowerCase()}|${userQuery.trim().toLowerCase().replace(/\s+/g, ' ')}`;
+  const cachedResult = smartVideoCache.get(cacheKey);
+  if (cachedResult && Date.now() - cachedResult.at < SMART_VIDEO_CACHE_TTL_MS) {
+    console.log(`[SmartVideoSearch] Cache hit for "${userQuery}" in ${destination}`);
+    return cachedResult.result;
+  }
+
   try {
     console.log(`[SmartVideoSearch] Starting for: "${userQuery}" in ${destination}`);
 
-    // Step 1: Extract search titles from user query
-    const titles = await extractSearchTitles(userQuery, destination);
+    // Step 1: Extract search titles from user query (max 2: each one is a 100-unit YouTube search)
+    const titles = (await extractSearchTitles(userQuery, destination)).slice(0, 2);
     console.log(`[SmartVideoSearch] Extracted ${titles.length} titles:`, titles);
 
     // Step 2: Search videos for each title
@@ -421,6 +455,11 @@ Key points: ${[...analysis.thingsToDo, ...analysis.tips].slice(0, 4).join('; ')}
 
     console.log(`[SmartVideoSearch] Complete with natural response (${aiResponse.length} chars)`);
 
+    if (smartVideoCache.size >= 100) {
+      const oldest = smartVideoCache.keys().next().value;
+      if (oldest !== undefined) smartVideoCache.delete(oldest);
+    }
+    smartVideoCache.set(cacheKey, { result, at: Date.now() });
     return result;
   } catch (error) {
     console.error('[SmartVideoSearch] Error:', error);
@@ -523,7 +562,7 @@ export async function orchestrateChat(params: {
     // Keep last 10 messages for context
     conversationHistory.push({
       role: msg.role as 'user' | 'assistant' | 'system',
-      content: msg.text,
+      content: clipHistoryText(msg.text),
     });
   }
 
@@ -538,7 +577,8 @@ export async function orchestrateChat(params: {
     model: DEFAULT_MODEL,
     messages: conversationHistory,
     tools: TOOLS,
-    tool_choice: 'auto',
+    tool_choice: toolChoiceFor(userMessage, chatMode),
+    temperature: 0, // deterministic tool arguments: same question => same search => cache hit
   });
 
   let assistantMessage = response.choices[0].message;
@@ -673,7 +713,7 @@ export async function* orchestrateChatStream(params: {
   for (const msg of messages.slice(-10)) {
     conversationHistory.push({
       role: msg.role as 'user' | 'assistant' | 'system',
-      content: msg.text,
+      content: clipHistoryText(msg.text),
     });
   }
 
@@ -688,7 +728,8 @@ export async function* orchestrateChatStream(params: {
     model: DEFAULT_MODEL,
     messages: conversationHistory,
     tools: TOOLS,
-    tool_choice: 'auto',
+    tool_choice: toolChoiceFor(userMessage, chatMode),
+    temperature: 0, // deterministic tool arguments: same question => same search => cache hit
   });
 
   let assistantMessage = response.choices[0].message;
@@ -776,7 +817,8 @@ export async function* orchestrateChatStream(params: {
     }
 
     // Always search for videos if destination is known and AI didn't already search
-    if (allVideos.length === 0 && promptContext.destination) {
+    // (Skipped in itinerary mode: videos are a side dish there, and each search costs YouTube quota and ~10s)
+    if (allVideos.length === 0 && promptContext.destination && chatMode !== 'itinerary') {
       // Use smart video search for deeper analysis
       const smartResult = await smartVideoSearch(userMessage, promptContext.destination);
       if (smartResult && smartResult.videos.length > 0) {
@@ -849,8 +891,9 @@ export async function* orchestrateChatStream(params: {
     let handledByVideoSearch = false;
 
     // Run smartVideoSearch FIRST if destination exists
-    // This prevents the flash of intermediate AI text
-    if (promptContext.destination) {
+    // This prevents the flash of intermediate AI text.
+    // Never in itinerary mode: the video answer would replace the itinerary the user asked for.
+    if (promptContext.destination && chatMode !== 'itinerary') {
       const smartResult = await smartVideoSearch(userMessage, promptContext.destination);
       if (smartResult && smartResult.videos.length > 0) {
         yield { type: 'smartVideoResult', smartVideoResult: smartResult };
@@ -892,7 +935,7 @@ export async function* orchestrateChatStream(params: {
       }
 
       // Fallback video search if smartVideoSearch wasn't available or failed
-      if (promptContext.destination) {
+      if (promptContext.destination && chatMode !== 'itinerary') {
         const autoVideos = await autoSearchVideos(
           userMessage,
           promptContext.destination,

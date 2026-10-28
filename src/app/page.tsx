@@ -2,62 +2,17 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Sparkles, ArrowRight, Star, CheckCircle, Plane } from 'lucide-react';
+import { Sparkles, ArrowRight, MapPin, CheckCircle, Plane } from 'lucide-react';
 import { HeroSearch, TrendingCarousel, CuratedCollections, HowItWorks } from '@/components/home';
 import { AdSlot } from '@/components/ads/AdSlot';
 import { AdSlotAutoRefresh } from '@/components/ads/AdSlotAutoRefresh';
 import { AD_SLOTS } from '@/lib/adsense/config';
+import { Navigation } from '@/components/shared/Navigation';
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation - Glassmorphism style */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-lg">
-                <Plane className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-foreground">
-                Voyagr
-              </span>
-            </Link>
-            <div className="flex items-center gap-4">
-              <Link
-                href="/discover"
-                className="hidden sm:block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Destinations
-              </Link>
-              <Link
-                href="/guides"
-                className="hidden sm:block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Guides
-              </Link>
-              <Link
-                href="/blog"
-                className="hidden sm:block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Blog
-              </Link>
-              <Link
-                href="/trips"
-                className="hidden md:block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                My Trips
-              </Link>
-              <Link
-                href="/plan"
-                className="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105"
-              >
-                Start Planning
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navigation />
 
       {/* Hero Section with Full-Screen Image */}
       <HeroSearch />
@@ -67,12 +22,8 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-16 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <div className="flex">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
-                ))}
-              </div>
-              <span>4.9/5 from 10,000+ travelers</span>
+              <MapPin className="h-4 w-4 text-primary" />
+              <span>Real-time places, weather &amp; travel videos</span>
             </div>
             <div className="hidden sm:block w-px h-4 bg-border" />
             <div className="flex items-center gap-2">
@@ -133,8 +84,8 @@ export default function HomePage() {
               <span className="text-primary">adventure?</span>
             </h2>
             <p className="text-lg text-muted-foreground mb-10 max-w-2xl mx-auto">
-              Join thousands of travelers who use Voyagr to discover new destinations,
-              get AI-powered recommendations, and create unforgettable experiences.
+              Discover new destinations, get AI-powered recommendations,
+              and turn your ideas into a day-by-day plan you can share.
             </p>
             <Link
               href="/plan"
@@ -172,7 +123,7 @@ export default function HomePage() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                   <Plane className="h-4 w-4 text-white" />
                 </div>
-                <span className="font-semibold">Voyagr</span>
+                <span className="font-semibold">Tripply</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 Your AI-powered travel companion for discovering and planning amazing trips.
@@ -204,7 +155,7 @@ export default function HomePage() {
           </div>
           <div className="border-t border-border pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} Voyagr. All rights reserved.
+              © {new Date().getFullYear()} Tripply. All rights reserved.
             </p>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span>Made with AI, for travelers</span>

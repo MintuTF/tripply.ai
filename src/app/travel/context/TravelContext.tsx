@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyBoardChanged } from '@/lib/travel/boardSnapshot';
 import React, { createContext, useContext, useReducer, useCallback, ReactNode, useEffect } from 'react';
 import type {
   TravelState,
@@ -420,6 +421,10 @@ interface TravelContextValue {
   // Draft trip actions
   createDraftTrip: (tripData: Partial<import('@/lib/travel/types').DraftTrip>) => void;
   addToTrip: (place: TravelPlace, cardType: 'hotel' | 'spot' | 'food' | 'activity') => boolean;
+  /** Add scheduled stops (day + time) to the draft trip, e.g. from an AI itinerary; returns how many were new */
+  addPlannedStops: (stops: import('@/lib/travel/itineraryToBoard').PlannedStop[]) => number;
+  /** Add places picked from a video as unscheduled Board ideas; returns how many were new */
+  addVideoPlaces: (items: { place: TravelPlace; cardType: 'hotel' | 'spot' | 'food' | 'activity' }[]) => number;
   saveDraftTripToDatabase: () => Promise<any>;
   createAndSaveTripToDatabase: (
     tripData: Partial<import('@/lib/travel/types').DraftTrip>,
@@ -663,6 +668,69 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     return true;
   }, [state.draftTrip]);
 
+  const addPlannedStops = useCallback((stops: import('@/lib/travel/itineraryToBoard').PlannedStop[]) => {
+    let added = 0;
+    const now = Date.now();
+    stops.forEach((stop, i) => {
+      const existing = state.draftCards.find((c) => c.placeData.id === stop.place.id && !c.day);
+      if (existing) {
+        // Already on the board as an idea: schedule it instead of duplicating it
+        dispatch({
+          type: 'UPDATE_DRAFT_CARD',
+          payload: { id: existing.id, updates: { day: stop.day, time_slot: stop.time_slot, order: stop.order } },
+        });
+        return;
+      }
+      dispatch({
+        type: 'ADD_TO_DRAFT_TRIP',
+        payload: {
+          id: `draft-${now}-${i}-${Math.random()}`,
+          type: stop.cardType,
+          placeData: stop.place,
+          labels: ['considering'],
+          day: stop.day,
+          time_slot: stop.time_slot,
+          order: stop.order,
+          addedAt: now + i,
+        },
+      });
+      added++;
+    });
+    return added;
+  }, [state.draftCards]);
+
+  const addVideoPlaces = useCallback((items: { place: TravelPlace; cardType: 'hotel' | 'spot' | 'food' | 'activity' }[]) => {
+    let added = 0;
+    const now = Date.now();
+    const seen = new Set(state.draftCards.map((c) => c.placeData.id));
+    items.forEach(({ place, cardType }, i) => {
+      if (seen.has(place.id)) {
+        // Already on the Board: just remember which video it was found in
+        const existing = state.draftCards.find((c) => c.placeData.id === place.id);
+        if (existing && !existing.placeData.source && place.source) {
+          dispatch({
+            type: 'UPDATE_DRAFT_CARD',
+            payload: { id: existing.id, updates: { placeData: { ...existing.placeData, source: place.source } } },
+          });
+        }
+        return;
+      }
+      seen.add(place.id);
+      dispatch({
+        type: 'ADD_TO_DRAFT_TRIP',
+        payload: {
+          id: `draft-${now}-${i}-${Math.random()}`,
+          type: cardType,
+          placeData: place,
+          labels: ['considering'],
+          addedAt: now + i,
+        },
+      });
+      added++;
+    });
+    return added;
+  }, [state.draftCards]);
+
   const createAndSaveTripToDatabase = useCallback(async (
     tripData: Partial<DraftTrip>,
     initialPlace?: { place: TravelPlace; cardType: 'hotel' | 'spot' | 'food' | 'activity' }
@@ -828,11 +896,13 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     } else {
       localStorage.removeItem('voyagr_draft_trip');
     }
+    notifyBoardChanged();
   }, [state.draftTrip]);
 
   // Save draft cards to localStorage on change
   useEffect(() => {
     localStorage.setItem('voyagr_draft_cards', JSON.stringify(state.draftCards));
+    notifyBoardChanged();
   }, [state.draftCards]);
 
   // Auto-create draft trip when user navigates to a city
@@ -925,6 +995,8 @@ export function TravelProvider({ children }: { children: ReactNode }) {
     setCityLoading,
     createDraftTrip,
     addToTrip,
+    addPlannedStops,
+    addVideoPlaces,
     saveDraftTripToDatabase,
     createAndSaveTripToDatabase,
     resumeTripCreationFromStorage,

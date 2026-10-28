@@ -2,50 +2,66 @@ import { NextResponse } from 'next/server';
 
 const PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
+// Photo references are opaque base64url strings
+const REF_PATTERN = /^[A-Za-z0-9_-]{20,2000}$/;
+const ALLOWED_WIDTHS = [200, 400, 800, 1200];
+
+function snapWidth(raw: string | null): number {
+  const requested = parseInt(raw || '800', 10);
+  if (!Number.isFinite(requested)) return 800;
+  return ALLOWED_WIDTHS.find((w) => w >= requested) ?? ALLOWED_WIDTHS[ALLOWED_WIDTHS.length - 1];
+}
+
+// Browser 1h, CDN 1 day. The CDN absorbs repeat views so each photo is billed once per cache window.
+const CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400';
+
 /**
- * GET /api/places/photo
- * Proxy endpoint for Google Places photos
- *
- * Query params:
- * - ref (required): Photo reference from Google Places API
- * - maxwidth (optional): Max width of image (default: 800)
+ * GET /api/places/photo?ref=...&maxwidth=...
+ * Keeps the Google API key server-side. Responds with a cacheable redirect to Google's
+ * key-free image URL, so image bytes never flow through this server.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const photoReference = searchParams.get('ref');
-  const maxWidth = searchParams.get('maxwidth') || '800';
 
-  if (!photoReference) {
-    return new NextResponse('Missing photo reference', { status: 400 });
+  if (!photoReference || !REF_PATTERN.test(photoReference)) {
+    return new NextResponse('Invalid photo reference', { status: 400 });
   }
 
   if (!PLACES_API_KEY) {
-    return new NextResponse('API key not configured', { status: 500 });
+    return new NextResponse('Photos unavailable', { status: 503 });
   }
 
+  const googleUrl =
+    `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${snapWidth(searchParams.get('maxwidth'))}` +
+    `&photoreference=${encodeURIComponent(photoReference)}&key=${PLACES_API_KEY}`;
+
   try {
-    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photoreference=${photoReference}&key=${PLACES_API_KEY}`;
+    const response = await fetch(googleUrl, { redirect: 'manual' });
+    const location = response.headers.get('location');
 
-    const response = await fetch(photoUrl, {
-      // Follow redirects (Google Places Photo API redirects to actual image)
-      redirect: 'follow',
-    });
-
-    if (!response.ok) {
-      console.error(`[Photo Proxy] Failed to fetch photo: ${response.status}`);
-      return new NextResponse('Failed to fetch photo', { status: response.status });
+    // Normal case: Google answers 302 with the final, key-free image URL
+    if (response.status >= 300 && response.status < 400 && location) {
+      return new NextResponse(null, {
+        status: 302,
+        headers: { Location: location, 'Cache-Control': CACHE_CONTROL },
+      });
     }
 
-    const buffer = await response.arrayBuffer();
+    if (!response.ok) {
+      console.error(`[Photo Proxy] Google responded ${response.status}`);
+      return new NextResponse('Photo unavailable', { status: response.status === 429 ? 503 : 404 });
+    }
 
-    return new NextResponse(buffer, {
+    // Fallback: Google returned image bytes directly
+    return new NextResponse(await response.arrayBuffer(), {
       headers: {
         'Content-Type': response.headers.get('Content-Type') || 'image/jpeg',
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800', // Cache for 24h, stale for 7 days
+        'Cache-Control': CACHE_CONTROL,
       },
     });
   } catch (error) {
     console.error('[Photo Proxy] Error:', error);
-    return new NextResponse('Error fetching photo', { status: 500 });
+    return new NextResponse('Photo unavailable', { status: 502 });
   }
 }

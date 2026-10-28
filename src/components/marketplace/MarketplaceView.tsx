@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTripContext } from '@/context/TripContext';
 import { TripContextBar } from './TripContextBar';
 import { TripContextModal } from './TripContextModal';
@@ -14,6 +14,7 @@ import {
   ProductRecommendation,
   MarketplaceTripContext,
   MarketplaceFilters,
+  ProductCategory,
   TripContextSummary,
 } from '@/types/marketplace';
 import { getTripContextSummary } from '@/lib/marketplace/tripContextUtils';
@@ -48,61 +49,78 @@ export function MarketplaceView({ tripContext, onClose }: MarketplaceViewProps) 
   const [tripSummary, setTripSummary] = useState<TripContextSummary | null>(null);
   const [filters, setFilters] = useState<MarketplaceFilters>({});
   const [showEditModal, setShowEditModal] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Get saved product IDs from cards
   const savedProductIds = new Set(
     cards?.filter(card => card.type === 'product').map(card => card.id) || []
   );
 
-  const fetchRecommendations = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // What the server needs to rank products. Built from primitive fields so it only changes when the trip
+  // actually changes (the trip/cards objects get a new identity on every context update).
+  const contextPayload: MarketplaceTripContext = tripContext || {
+    destination: trip?.destination?.name,
+    destinationCoordinates: trip?.destination?.coordinates,
+    duration: trip?.dates?.start && trip?.dates?.end
+      ? Math.ceil((new Date(trip.dates.end).getTime() - new Date(trip.dates.start).getTime()) / (1000 * 60 * 60 * 24))
+      : undefined,
+    startDate: trip?.dates?.start,
+    endDate: trip?.dates?.end,
+    partySize: (trip?.party_json?.adults || 0) + (trip?.party_json?.children || 0) + (trip?.party_json?.infants || 0),
+    hasChildren: (trip?.party_json?.children || 0) > 0,
+    hasInfants: (trip?.party_json?.infants || 0) > 0,
+  };
+  const contextKey = JSON.stringify(contextPayload);
+  const tripRef = useRef(trip);
+  tripRef.current = trip;
 
-    try {
-      // Build trip context from TripContext
-      const contextPayload: MarketplaceTripContext = tripContext || {
-        destination: trip?.destination?.name,
-        destinationCoordinates: trip?.destination?.coordinates,
-        duration: trip?.dates ? Math.ceil(
-          (new Date(trip.dates.end).getTime() - new Date(trip.dates.start).getTime()) / (1000 * 60 * 60 * 24)
-        ) : undefined,
-        startDate: trip?.dates?.start,
-        endDate: trip?.dates?.end,
-        partySize: (trip?.party_json?.adults || 0) + (trip?.party_json?.children || 0) + (trip?.party_json?.infants || 0),
-        hasChildren: (trip?.party_json?.children || 0) > 0,
-        hasInfants: (trip?.party_json?.infants || 0) > 0,
-      };
-
-      const response = await fetch('/api/marketplace/recommend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tripContext: contextPayload,
-          filters,
-          trip, // NEW: Pass full trip object for TripContextSummary
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch recommendations');
-      }
-
-      const data: SectionedRecommendationResponse = await response.json();
-      setTopRecommendations(data.topRecommendations || []);
-      setDontForget(data.dontForget || []);
-      setComfortUpgrades(data.comfortUpgrades || []);
-      setTripSummary(data.tripContextSummary || (trip ? getTripContextSummary(trip) : null));
-    } catch (err) {
-      console.error('Error fetching recommendations:', err);
-      setError('Failed to load recommendations. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [trip, tripContext, filters, cards]);
-
+  // Fetch once per trip context. Filters and search are applied in the browser (see filterProducts),
+  // so typing in the search box or toggling a filter must not hit the server again.
   useEffect(() => {
-    fetchRecommendations();
-  }, [fetchRecommendations]);
+    const controller = new AbortController();
+
+    // Wait briefly: the trip context fills in over several renders, and only the final one is worth a request
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch('/api/marketplace/recommend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tripContext: contextPayload,
+            filters: {},
+            trip: tripRef.current,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch recommendations');
+        }
+
+        const data: SectionedRecommendationResponse = await response.json();
+        setTopRecommendations(data.topRecommendations || []);
+        setDontForget(data.dontForget || []);
+        setComfortUpgrades(data.comfortUpgrades || []);
+        setTripSummary(
+          data.tripContextSummary || (tripRef.current ? getTripContextSummary(tripRef.current) : null)
+        );
+        setLoading(false);
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return; // superseded by a newer request
+        console.error('Error fetching recommendations:', err);
+        setError('Failed to load recommendations. Please try again.');
+        setLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextKey, retryCount]);
 
   const handleFiltersChange = useCallback((newFilters: MarketplaceFilters) => {
     setFilters(newFilters);
@@ -137,6 +155,13 @@ export function MarketplaceView({ tripContext, onClose }: MarketplaceViewProps) 
   const filteredDontForget = filterProducts(dontForget);
   const filteredComfortUpgrades = filterProducts(comfortUpgrades);
 
+  const categoryCounts = [...topRecommendations, ...dontForget, ...comfortUpgrades].reduce<
+    Partial<Record<ProductCategory, number>>
+  >((acc, product) => {
+    acc[product.category] = (acc[product.category] || 0) + 1;
+    return acc;
+  }, {});
+
   const hasAnyProducts =
     filteredTopRecommendations.length > 0 ||
     filteredDontForget.length > 0 ||
@@ -148,7 +173,7 @@ export function MarketplaceView({ tripContext, onClose }: MarketplaceViewProps) 
       <TripContextBar onEditClick={() => setShowEditModal(true)} />
 
       {/* Filter Bar - Sticky below trip context */}
-      <FilterBar onFiltersChange={handleFiltersChange} initialFilters={filters} />
+      <FilterBar onFiltersChange={handleFiltersChange} initialFilters={filters} categoryCounts={categoryCounts} />
 
       {/* Main Content */}
       <div className="relative">
@@ -176,7 +201,7 @@ export function MarketplaceView({ tripContext, onClose }: MarketplaceViewProps) 
               </div>
               <p className="text-red-600 text-sm mb-6">{error}</p>
               <button
-                onClick={fetchRecommendations}
+                onClick={() => setRetryCount((n) => n + 1)}
                 className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium hover:shadow-lg transition-all"
               >
                 Try Again
@@ -221,9 +246,13 @@ export function MarketplaceView({ tripContext, onClose }: MarketplaceViewProps) 
                   </h1>
                 </div>
                 <p className="text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                  We've curated {filteredTopRecommendations.length + filteredDontForget.length + filteredComfortUpgrades.length} personalized
-                  recommendations to help you prepare for your {tripSummary.duration}-day trip.
+                  We&apos;ve curated {filteredTopRecommendations.length + filteredDontForget.length + filteredComfortUpgrades.length} personalized
+                  recommendations to help you prepare for your {tripSummary.duration > 0 ? `${tripSummary.duration}-day trip` : 'trip'}.
                   Each item is selected based on your destination, season, and travel style.
+                </p>
+                <p className="mt-3 text-xs text-gray-500 max-w-2xl mx-auto">
+                  Some links are affiliate links: if you buy through them, Tripply may earn a commission at no extra
+                  cost to you. As an Amazon Associate we earn from qualifying purchases.
                 </p>
               </motion.div>
             )}

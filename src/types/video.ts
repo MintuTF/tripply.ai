@@ -109,3 +109,42 @@ export interface YouTubeSearchResponse {
   };
   items: YouTubeSearchResult[];
 }
+
+// A place named in a video, resolved to a real map place when possible
+export interface VideoPlaceMatch {
+  /** Name as said in the video */
+  name: string;
+  type: VideoPlace['type'];
+  cardType: 'hotel' | 'spot' | 'food' | 'activity';
+  /** Moment (seconds) where it is first mentioned */
+  startSec: number;
+  /** Why the video mentions it */
+  note: string;
+  /** Real place from Google; absent when nothing was found */
+  place?: import('@/lib/travel/types').TravelPlace;
+  /** 'check' = Google's top result under a different name (often the English name): the traveler confirms it */
+  matchLevel?: 'exact' | 'check';
+}
+
+// A point the video makes, with the moment it is said
+export interface VideoNote {
+  text: string;
+  startSec?: number;
+}
+
+export interface VideoPlacesResult {
+  videoId: string;
+  /** What the video actually covers, 2-3 sentences */
+  summary: string;
+  /** Specific facts and recommendations the video states (prices, times, routes) */
+  takeaways: VideoNote[];
+  /** Practical advice the video gives: booking, money, transport, timing, what to bring */
+  tips: VideoNote[];
+  /** Warnings and mistakes the video tells viewers to avoid */
+  avoid: VideoNote[];
+  places: VideoPlaceMatch[];
+  /** True when the places came from captions; false = title/description only */
+  hasTranscript: boolean;
+  /** True when a very long video was only read up to a point */
+  truncated: boolean;
+}

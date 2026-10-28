@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Sparkles, ChevronDown, Loader2, Lock, X, Square } from 'lucide-react';
+import { Send, Sparkles, ChevronDown, Loader2, Lock, X, Square, Plus, Clock } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
 import { useTravel } from '../../context/TravelContext';
 import { useTripContext } from '@/context/TripContext';
 import { useAuth } from '@/hooks/useAuth';
 import { ChatHistoryProvider, useChatHistory } from '@/context/ChatHistoryContext';
 import { TravelChatHeader } from '@/components/chat/TravelChatHeader';
-import { FloatingItineraryButton } from '@/components/chat/FloatingItineraryButton';
 import { ChatFloatingMenu } from '@/components/chat/ChatFloatingMenu';
 import { ChatHistoryDrawer } from '@/components/chat/ChatHistoryDrawer';
 import { PlaceCardGroup, PlaceWithWhy } from '@/components/chat/PlaceCardGroup';
@@ -22,6 +22,9 @@ import { generateFallbackWhy } from '@/lib/ai/whyGenerator';
 import { getPlaceholderByMode, getSamplePromptsByMode } from '@/lib/ai/prompts';
 import ReactMarkdown from 'react-markdown';
 import type { TravelPlace } from '@/lib/travel/types';
+import { SignInModal } from '@/components/auth/SignInModal';
+import { parseItineraryFromResponse } from '@/lib/ai/itinerarySchema';
+import { planItineraryStops, placeCardToTravelPlace } from '@/lib/travel/itineraryToBoard';
 
 /**
  * Chat Tab Content - AI Travel Companion
@@ -52,10 +55,20 @@ export function ChatTabContent() {
  * Inner component that consumes the ChatHistoryContext
  */
 function ChatTabContentInner() {
-  const { state: travelState, selectPlace } = useTravel();
+  const { state: travelState, selectPlace, addPlannedStops } = useTravel();
   const { city, savedPlaceIds } = travelState;
+  const router = useRouter();
+  const routeParams = useParams<{ citySlug: string }>();
+  const openBoard = () => router.push(`/travel/${routeParams.citySlug}/board`);
+
+  const handleAddItineraryToBoard = (itinerary: ItineraryResponse, cards?: PlaceCard[]) => {
+    const { stops, skipped } = planItineraryStops(itinerary, cards || []);
+    addPlannedStops(stops);
+    return { added: stops.length, skipped: skipped.length };
+  };
   const { trip, addCard } = useTripContext();
   const { user } = useAuth();
+  const [showSignIn, setShowSignIn] = useState(false);
 
   // Chat history context
   const {
@@ -86,6 +99,8 @@ function ChatTabContentInner() {
   // Chat mode state - sync with current conversation
   const [chatMode, setChatMode] = useState<ChatMode>('ask');
   const [messages, setMessages] = useState<ModeAwareMessage[]>([]);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -98,9 +113,28 @@ function ChatTabContentInner() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isStreamingRef = useRef(false);
 
-  // Sync messages when current conversation changes
+  // Sync messages when current conversation changes.
+  // Skipped while a reply is streaming: saving the user's message updates currentMessages,
+  // and syncing then would overwrite the in-flight assistant placeholder and drop the reply.
   useEffect(() => {
+    if (isStreamingRef.current) return;
+
+    // The stored copy only keeps plain text. If the on-screen messages already match it, keep them:
+    // they also carry the place cards, videos and itinerary, which a re-sync would wipe.
+    const local = messagesRef.current;
+    // (The on-screen reply types out gradually, so it may still be a prefix of the saved text.)
+    const alreadyInSync =
+      local.length === currentMessages.length &&
+      local.every(
+        (m, i) =>
+          m.role === currentMessages[i].role &&
+          (m.text === currentMessages[i].text ||
+            (m.role === 'assistant' && currentMessages[i].text.startsWith(m.text)))
+      );
+    if (alreadyInSync) return;
+
     // Convert stored messages to ModeAwareMessage format
     const modeAwareMessages: ModeAwareMessage[] = currentMessages.map((msg) => ({
       ...msg,
@@ -333,6 +367,14 @@ function ChatTabContentInner() {
     };
 
     const assistantMessageId = generateUUID();
+    const isFirstExchange = messages.length === 0;
+    // Plain accumulator so persisting the reply never depends on a state updater (which may run twice)
+    const draft: {
+      text: string;
+      cards_json?: ModeAwareMessage['cards_json'];
+      videos_json?: ModeAwareMessage['videos_json'];
+      itinerary_json?: ModeAwareMessage['itinerary_json'];
+    } = { text: '' };
     const assistantMessage: ModeAwareMessage = {
       id: assistantMessageId,
       trip_id: tripId,
@@ -345,6 +387,7 @@ function ChatTabContentInner() {
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setInputValue('');
     setIsLoading(true);
+    isStreamingRef.current = true;
 
     // Save message - guest mode uses localStorage, auth uses database
     if (isGuest) {
@@ -436,6 +479,7 @@ function ChatTabContentInner() {
                   };
                 });
 
+                draft.cards_json = cardsWithWhy;
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantMessageId
@@ -445,6 +489,7 @@ function ChatTabContentInner() {
                 );
               } else if (data.type === 'videos') {
                 // Handle video results from search_videos tool
+                draft.videos_json = data.videos as ChatVideoResult[];
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantMessageId
@@ -471,12 +516,14 @@ function ChatTabContentInner() {
                   )
                 );
               } else if (data.type === 'content') {
+                draft.text += data.content;
                 contentBufferRef.current += data.content;
                 if (!displayIntervalRef.current) {
                   startContentDisplay(assistantMessageId);
                 }
               } else if (data.type === 'itinerary') {
                 // Handle itinerary JSON from itinerary mode
+                draft.itinerary_json = data.itinerary as ItineraryResponse;
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantMessageId
@@ -486,66 +533,60 @@ function ChatTabContentInner() {
                 );
               } else if (data.type === 'done') {
                 stopContentDisplay();
-                setMessages((prev) => {
-                  const updatedMessages = prev.map((msg) =>
+                setMessages((prev) =>
+                  prev.map((msg) =>
                     msg.id === assistantMessageId
                       ? { ...msg, citations_json: data.citations }
                       : msg
-                  );
+                  )
+                );
 
-                  // Save assistant message
-                  const finalAssistantMsg = updatedMessages.find((m) => m.id === assistantMessageId);
+                if (isGuest) {
+                  // Guest mode: keep the reply in localStorage
+                  addGuestMessage({ role: 'assistant', text: draft.text, chat_mode: chatMode });
+                } else if (conversationId && user?.id) {
+                  // Authenticated: save to database
+                  addMessage({
+                    trip_id: tripId,
+                    role: 'assistant',
+                    text: draft.text,
+                    chat_mode: chatMode,
+                    cards_json: draft.cards_json,
+                    videos_json: draft.videos_json,
+                    itinerary_json: draft.itinerary_json,
+                  });
 
-                  if (finalAssistantMsg) {
-                    // Guest mode: save to localStorage and show login prompt
-                    if (isGuest) {
-                      addGuestMessage({
-                        role: 'assistant',
-                        text: finalAssistantMsg.text,
-                        chat_mode: chatMode,
-                      });
-                      // Show login prompt after first exchange
-                      setTimeout(() => setShowLoginPrompt(true), 500);
-                    } else if (conversationId && user?.id) {
-                      // Authenticated: save to database
-                      addMessage({
-                        trip_id: tripId,
-                        role: 'assistant',
-                        text: finalAssistantMsg.text,
-                        chat_mode: chatMode,
-                        cards_json: finalAssistantMsg.cards_json,
-                        videos_json: finalAssistantMsg.videos_json,
-                        itinerary_json: finalAssistantMsg.itinerary_json,
-                      });
-
-                      // Generate AI title after first exchange (2 messages: user + assistant)
-                      if (updatedMessages.length <= 2) {
-                        const titleMessages = [
+                  // Generate AI title after the first exchange
+                  if (isFirstExchange) {
+                    fetch(`/api/chat/conversations/${conversationId}/generate-title`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        messages: [
                           { role: 'user' as const, text },
-                          { role: 'assistant' as const, text: finalAssistantMsg.text },
-                        ];
-
-                        fetch(`/api/chat/conversations/${conversationId}/generate-title`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ messages: titleMessages }),
-                        })
-                          .then((res) => res.json())
-                          .then((data) => {
-                            if (data.title) {
-                              updateConversationTitle(data.title);
-                            }
-                          })
-                          .catch((err) => console.error('Failed to generate title:', err));
-                      }
-                    }
+                          { role: 'assistant' as const, text: draft.text },
+                        ],
+                      }),
+                    })
+                      .then((res) => res.json())
+                      .then((data) => {
+                        if (data.title) {
+                          updateConversationTitle(data.title);
+                        }
+                      })
+                      .catch((err) => console.error('Failed to generate title:', err));
                   }
-
-                  return updatedMessages;
-                });
+                }
               } else if (data.type === 'error') {
                 stopContentDisplay();
-                throw new Error(data.error);
+                console.error('Chat stream error:', data.error);
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId && !msg.text
+                      ? { ...msg, text: 'Sorry, something went wrong generating a reply. Please try again.' }
+                      : msg
+                  )
+                );
               }
             } catch (parseError) {
               console.error('Error parsing stream data:', parseError);
@@ -570,6 +611,7 @@ function ChatTabContentInner() {
         )
       );
     } finally {
+      isStreamingRef.current = false;
       setIsLoading(false);
       abortControllerRef.current = null;
     }
@@ -600,7 +642,7 @@ function ChatTabContentInner() {
   };
 
   return (
-    <div className="relative h-[calc(100vh-120px)]">
+    <div className="relative h-[calc(100dvh-120px)]">
       {/* Main Chat Area - Full Width */}
       <div className="flex flex-col h-full">
         {/* Header with Mode Toggle */}
@@ -612,7 +654,34 @@ function ChatTabContentInner() {
             tripName={trip?.title}
             className="border-0"
           />
-          <div className="px-4 py-2">
+          <div className="flex items-center gap-1 px-4 py-2">
+            <div className="flex items-center md:hidden">
+              <button
+                type="button"
+                onClick={handleNewChat}
+                aria-label="New chat"
+                title="New chat"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsHistoryOpen(true)}
+                aria-label="Chat history"
+                title="Chat history"
+                className="relative flex h-10 w-10 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                <Clock className="h-5 w-5" />
+                {(isGuest ? guestConversations.length : conversations.length) > 0 && (
+                  <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-purple-500 text-[10px] font-bold text-white">
+                    {(isGuest ? guestConversations.length : conversations.length) > 9
+                      ? '9+'
+                      : isGuest ? guestConversations.length : conversations.length}
+                  </span>
+                )}
+              </button>
+            </div>
             <ChatModeToggle
               mode={chatMode}
               onModeChange={handleModeChange}
@@ -677,23 +746,9 @@ function ChatTabContentInner() {
                 savedPlaceIds={savedPlaceIds}
                 isStreaming={isLoading && message.role === 'assistant' && message === messages[messages.length - 1]}
                 onAskFollowUp={handleSendMessage}
-                onViewDetails={(place) => {
-                  // Convert PlaceCard to TravelPlace format for the drawer
-                  const travelPlace: TravelPlace = {
-                    id: place.id,
-                    name: place.name,
-                    imageUrl: place.photos?.[0] || '',
-                    categories: [place.type],
-                    rating: place.rating || 0,
-                    reviewCount: place.review_count || 0,
-                    popularityScore: place.rating || 0,
-                    description: place.description || '',
-                    coordinates: place.location || place.coordinates || { lat: 0, lng: 0 },
-                    address: place.vicinity || place.address,
-                    priceLevel: place.price_level,
-                  };
-                  selectPlace(travelPlace);
-                }}
+                onAddItineraryToBoard={handleAddItineraryToBoard}
+                onOpenBoard={openBoard}
+                onViewDetails={(place) => selectPlace(placeCardToTravelPlace(place))}
                 onVideoPlaceClick={(place) => selectPlace(place)}
               />
             ))}
@@ -728,7 +783,7 @@ function ChatTabContentInner() {
         {/* Scroll to Bottom Button */}
         <AnimatePresence>
           {showScrollButton && (
-            <motion.button
+            <motion.button aria-label="Scroll to latest message"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
@@ -742,6 +797,22 @@ function ChatTabContentInner() {
 
         {/* Input Area - ChatGPT Style */}
         <div className="bg-gradient-to-t from-white via-white to-transparent dark:from-gray-950 dark:via-gray-950 pt-6 pb-4">
+          {isGuest && guestMessageLimitReached && !isLoading && (
+            <div className="max-w-3xl mx-auto px-4 mb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-purple-100 dark:border-purple-900/40 bg-purple-50/80 dark:bg-purple-950/30 px-4 py-3">
+                <p className="flex-1 text-sm text-gray-700 dark:text-gray-300">
+                  That was your free question. Sign in to keep chatting and save your trip ideas.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowSignIn(true)}
+                  className="shrink-0 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 text-sm font-medium text-white hover:shadow-lg hover:shadow-purple-200 transition-all"
+                >
+                  Sign in with email
+                </button>
+              </div>
+            </div>
+          )}
           <form
             onSubmit={handleSubmit}
             className="max-w-3xl mx-auto px-4"
@@ -757,7 +828,7 @@ function ChatTabContentInner() {
                   e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder={placeholderText}
+                placeholder={isGuest && guestMessageLimitReached ? 'Sign in to keep chatting' : placeholderText}
                 disabled={isLoading || (isGuest && guestMessageLimitReached)}
                 rows={1}
                 className={cn(
@@ -771,7 +842,7 @@ function ChatTabContentInner() {
                 style={{ minHeight: '56px', maxHeight: '200px' }}
               />
               {isLoading ? (
-                <button
+                <button aria-label="Stop generating"
                   type="button"
                   onClick={handleStop}
                   className="absolute right-3 bottom-3 p-2 rounded-lg transition-all duration-200 bg-red-500 hover:bg-red-600 text-white"
@@ -779,7 +850,7 @@ function ChatTabContentInner() {
                   <Square className="h-5 w-5 fill-current" />
                 </button>
               ) : (
-                <button
+                <button aria-label="Send message"
                   type="submit"
                   disabled={!inputValue.trim()}
                   className={cn(
@@ -800,21 +871,13 @@ function ChatTabContentInner() {
                 Click the stop button to cancel
               </p>
             ) : (
-              <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2">
-                Voyagr can make mistakes. Consider verifying important info.
+              <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2 pr-36 sm:pr-0">
+                Tripply can make mistakes. Consider verifying important info.
               </p>
             )}
           </form>
         </div>
 
-        {/* Floating Itinerary Button */}
-        <FloatingItineraryButton
-          placesCount={savedPlaceIds.length}
-          onClick={() => {
-            // TODO: Open itinerary panel
-            console.log('Open itinerary');
-          }}
-        />
       </div>
 
       {/* Floating Chat Menu - Bottom Left */}
@@ -837,6 +900,8 @@ function ChatTabContentInner() {
         guestConversations={guestConversations}
         onDeleteGuestConversation={deleteGuestConversation}
       />
+
+      <SignInModal isOpen={showSignIn} onClose={() => setShowSignIn(false)} />
 
       {/* Login Prompt Modal - Shows after guest sends first message */}
       <AnimatePresence>
@@ -913,18 +978,16 @@ function ChatTabContentInner() {
 
                   {/* Buttons */}
                   <div className="space-y-3">
-                    <a
-                      href="/auth/login"
+                    <button
+                      type="button"
+                      onClick={() => setShowSignIn(true)}
                       className="flex items-center justify-center w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:shadow-lg hover:shadow-purple-200 transition-all"
                     >
-                      Sign In
-                    </a>
-                    <a
-                      href="/auth/signup"
-                      className="flex items-center justify-center w-full py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      Create Account
-                    </a>
+                      Sign in with email
+                    </button>
+                    <p className="text-center text-xs text-gray-500 dark:text-gray-400">
+                      New here? We&apos;ll create your account automatically.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -952,6 +1015,8 @@ function ChatMessageItem({
   onAskFollowUp,
   onViewDetails,
   onVideoPlaceClick,
+  onAddItineraryToBoard,
+  onOpenBoard,
 }: {
   message: ModeAwareMessage;
   cityName?: string;
@@ -961,15 +1026,26 @@ function ChatMessageItem({
   onAskFollowUp?: (question: string) => void;
   onViewDetails?: (place: PlaceCard) => void;
   onVideoPlaceClick?: (place: TravelPlace) => void;
+  onAddItineraryToBoard?: (itinerary: ItineraryResponse, cards?: PlaceCard[]) => { added: number; skipped: number };
+  onOpenBoard?: () => void;
 }) {
   const isUser = message.role === 'user';
   const cards = message.cards_json as PlaceWithWhy[] | undefined;
   const videos = message.videos_json as ChatVideoResult[] | undefined;
   const videoAnalysis = message.videoAnalysis_json as VideoAnalysis | undefined;
   const smartVideoResult = (message as any).smartVideoResult_json as SmartVideoResult | undefined;
-  const itinerary = message.itinerary_json;
   const isItineraryMode = message.chatMode === 'itinerary';
   const isAskMode = !isItineraryMode;
+
+  // Saved guest chats keep only the text, so rebuild an older itinerary from the JSON block inside it
+  const itinerary = useMemo(
+    () =>
+      message.itinerary_json ??
+      (isItineraryMode && !isStreaming && message.text
+        ? (parseItineraryFromResponse(message.text) as unknown as ItineraryResponse | null) ?? undefined
+        : undefined),
+    [message.itinerary_json, message.text, isItineraryMode, isStreaming]
+  );
 
   return (
     <motion.div
@@ -1039,11 +1115,13 @@ function ChatMessageItem({
                 onAdjustPace={() => onAskFollowUp?.('Make the pace more relaxed')}
                 onAddDay={() => onAskFollowUp?.('Add another day to the itinerary')}
                 onChangeFocus={() => onAskFollowUp?.('Focus more on food experiences')}
+                onAddToBoard={onAddItineraryToBoard ? () => onAddItineraryToBoard(itinerary, cards) : undefined}
+                onOpenBoard={onOpenBoard}
               />
             )}
 
             {/* ITINERARY MODE: Show loading state while generating (hide raw text/JSON) */}
-            {isItineraryMode && !itinerary && (
+            {isItineraryMode && !itinerary && isStreaming && (
               <div className="rounded-xl bg-white dark:bg-gray-900 border border-purple-100 dark:border-purple-800 px-4 py-6 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div className="animate-spin rounded-full h-5 w-5 border-2 border-purple-500 border-t-transparent" />
@@ -1051,6 +1129,22 @@ function ChatMessageItem({
                     Creating your personalized itinerary...
                   </span>
                 </div>
+              </div>
+            )}
+
+            {/* ITINERARY MODE: generation finished but no plan could be built: say so instead of spinning forever */}
+            {isItineraryMode && !itinerary && !isStreaming && (
+              <div className="rounded-xl bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800 px-4 py-5 shadow-sm">
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  I couldn&apos;t turn that into a day-by-day plan. Please try again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onAskFollowUp?.('Please create the day-by-day itinerary again')}
+                  className="mt-3 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700"
+                >
+                  Try again
+                </button>
               </div>
             )}
           </>

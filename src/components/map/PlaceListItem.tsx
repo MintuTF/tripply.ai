@@ -246,7 +246,7 @@ export function PlaceListItem({
 
         {/* Actual image */}
         {hasPhoto && coverPhoto && (
-          <img
+          <img loading="lazy" decoding="async"
             src={coverPhoto}
             alt={payload.name}
             className={cn(

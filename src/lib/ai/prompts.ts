@@ -285,8 +285,8 @@ export function getSamplePromptsByMode(mode: ChatMode): string[] {
     return [
       'Plan a 3-day romantic trip',
       'Create a family-friendly week itinerary',
-      'Make Day 2 more relaxed',
-      'Add more food experiences',
+      'Plan a 2-day food-focused trip',
+      'Plan a relaxed weekend',
     ];
   }
   return [

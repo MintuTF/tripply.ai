@@ -15,7 +15,7 @@ export function Footer() {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                 <Plane className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold">Voyagr</span>
+              <span className="text-xl font-bold">Tripply</span>
             </div>
             <p className="text-gray-400 text-sm md:text-base max-w-md">
               Discover amazing destinations, get personalized recommendations,
@@ -72,7 +72,7 @@ export function Footer() {
         <div className="border-t border-gray-800 mt-4 pt-4 md:mt-10 md:pt-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-gray-500">
-              © {currentYear} Voyagr. All rights reserved.
+              © {currentYear} Tripply. All rights reserved.
             </p>
 
             <div className="flex items-center gap-1 text-sm text-gray-500">

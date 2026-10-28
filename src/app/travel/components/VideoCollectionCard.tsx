@@ -6,6 +6,7 @@ import { Play, X, Volume2, VolumeX, ChevronRight, RotateCcw, Expand } from 'luci
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import type { YouTubeVideo } from '@/types/video';
+import { fetchJsonOnce } from '@/lib/utils/fetchOnce';
 import type { TravelPlace } from '@/lib/travel/types';
 import { VideoContentPanel } from './VideoContentPanel';
 import { sendYouTubeCommand as sendCommand, buildEmbedUrl, replayVideo } from '@/lib/video';
@@ -55,15 +56,15 @@ export function VideoCollectionCard({
     const fetchVideo = async () => {
       try {
         // Pass skipFilter=true to get all 25 videos from the database cache
-        const response = await fetch(
+        const data = await fetchJsonOnce<{ videos?: YouTubeVideo[] }>(
           `/api/travel/videos?type=collection&name=${encodeURIComponent(searchQuery)}&id=${id}&cityName=${encodeURIComponent(cityName)}&country=${encodeURIComponent(country)}&skipFilter=true`
         );
-        const data = await response.json();
         if (data.videos && data.videos.length > 0) {
-          // Take top 4 videos (sorted by score) and randomly select one
+          // Pick among the top 4 by a stable hash of the collection id, so the same card shows the
+          // same video on every visit (random picks made the page look different on each refresh)
           const top4 = data.videos.slice(0, 4);
-          const randomIndex = Math.floor(Math.random() * top4.length);
-          setVideo(top4[randomIndex]);
+          const hash = Array.from(id).reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+          setVideo(top4[hash % top4.length]);
         }
       } catch (error) {
         console.error('Failed to fetch collection video:', error);
@@ -206,7 +207,7 @@ export function VideoCollectionCard({
                     />
                   </motion.div>
                 ) : (
-                  <motion.img
+                  <motion.img loading="lazy" decoding="async"
                     key="thumbnail"
                     src={video.thumbnailUrl}
                     alt={title}
@@ -243,7 +244,7 @@ export function VideoCollectionCard({
                   transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                   className="absolute inset-0 flex items-center justify-center"
                 >
-                  <motion.button
+                  <motion.button aria-label="Play video"
                     onClick={handlePlayClick}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
@@ -281,7 +282,7 @@ export function VideoCollectionCard({
                       </motion.div>
                     </Link>
 
-                    <motion.button
+                    <motion.button aria-label="Toggle sound"
                       onClick={handleMuteToggle}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.95 }}
@@ -294,7 +295,7 @@ export function VideoCollectionCard({
                       )}
                     </motion.button>
 
-                    <motion.button
+                    <motion.button aria-label="Stop video"
                       onClick={handleStopClick}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.95 }}
@@ -312,7 +313,7 @@ export function VideoCollectionCard({
                       exit={{ opacity: 0, scale: 0.8 }}
                       className="absolute inset-0 flex items-center justify-center z-20"
                     >
-                      <motion.button
+                      <motion.button aria-label="Pause or resume video"
                         onClick={handlePauseToggle}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
@@ -331,7 +332,7 @@ export function VideoCollectionCard({
                       exit={{ opacity: 0, scale: 0.8 }}
                       className="absolute inset-0 flex items-center justify-center z-20 bg-black/40"
                     >
-                      <motion.button
+                      <motion.button aria-label="Replay video"
                         onClick={handleReplay}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}

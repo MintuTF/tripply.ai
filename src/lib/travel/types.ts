@@ -1,5 +1,7 @@
 // Types for the Travel Research Page
 
+import type { CardSource } from '@/types';
+
 export interface CityData {
   name: string;
   country: string;
@@ -37,6 +39,8 @@ export interface TravelPlace {
   openNow?: boolean;
   duration?: string;
   area?: string;
+  /** Set when the place was added from a travel video (shown in the PDF guide's watch list) */
+  source?: CardSource;
 }
 
 export type TravelerProfile = 'solo' | 'couple' | 'family' | 'friends';

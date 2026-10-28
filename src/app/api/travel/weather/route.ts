@@ -10,82 +10,68 @@ export interface WeatherData {
   windSpeed: number;
 }
 
-// Cache for weather data
 const weatherCache = new Map<string, { data: WeatherData; timestamp: number }>();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
+// WMO weather interpretation codes -> condition names the UI already maps to emojis
+function describeWeatherCode(code: number): { condition: string; description: string } {
+  if (code === 0) return { condition: 'Clear', description: 'clear sky' };
+  if (code === 1) return { condition: 'Clear', description: 'mainly clear' };
+  if (code === 2) return { condition: 'Clouds', description: 'partly cloudy' };
+  if (code === 3) return { condition: 'Clouds', description: 'overcast' };
+  if (code === 45 || code === 48) return { condition: 'Fog', description: 'fog' };
+  if (code >= 51 && code <= 57) return { condition: 'Drizzle', description: 'drizzle' };
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return { condition: 'Rain', description: 'rain' };
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return { condition: 'Snow', description: 'snow' };
+  if (code >= 95) return { condition: 'Thunderstorm', description: 'thunderstorm' };
+  return { condition: 'Clouds', description: 'cloudy' };
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const lat = searchParams.get('lat');
-  const lng = searchParams.get('lng');
+  const lat = parseFloat(searchParams.get('lat') ?? '');
+  const lng = parseFloat(searchParams.get('lng') ?? '');
 
-  if (!lat || !lng) {
-    return NextResponse.json(
-      { error: 'lat and lng are required' },
-      { status: 400 }
-    );
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return NextResponse.json({ error: 'Valid lat and lng are required' }, { status: 400 });
   }
 
-  const cacheKey = `${lat},${lng}`;
-
-  // Check cache
+  const cacheKey = `${lat.toFixed(2)},${lng.toFixed(2)}`;
   const cached = weatherCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return NextResponse.json({ weather: cached.data, cached: true });
   }
 
-  const apiKey = process.env.OPENWEATHER_API_KEY;
-
-  // If no API key, return mock data
-  if (!apiKey) {
-    const mockWeather: WeatherData = {
-      temp: 22,
-      feelsLike: 23,
-      condition: 'Clear',
-      description: 'clear sky',
-      icon: '01d',
-      humidity: 60,
-      windSpeed: 5,
-    };
-    return NextResponse.json({ weather: mockWeather, mock: true });
-  }
-
   try {
-    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&units=metric&appid=${apiKey}`;
+    // Open-Meteo: free, no API key required
+    const url =
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+      `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day` +
+      `&wind_speed_unit=ms&timezone=auto`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
-      throw new Error('Failed to fetch weather');
+      throw new Error(`Open-Meteo responded ${response.status}`);
     }
 
-    const data = await response.json();
+    const { current } = await response.json();
+    const { condition, description } = describeWeatherCode(current.weather_code);
 
     const weather: WeatherData = {
-      temp: Math.round(data.main.temp),
-      feelsLike: Math.round(data.main.feels_like),
-      condition: data.weather[0]?.main || 'Unknown',
-      description: data.weather[0]?.description || '',
-      icon: data.weather[0]?.icon || '01d',
-      humidity: data.main.humidity,
-      windSpeed: Math.round(data.wind.speed),
+      temp: Math.round(current.temperature_2m),
+      feelsLike: Math.round(current.apparent_temperature),
+      condition,
+      description,
+      icon: current.is_day ? '01d' : '01n',
+      humidity: current.relative_humidity_2m,
+      windSpeed: Math.round(current.wind_speed_10m),
     };
 
-    // Cache the result
     weatherCache.set(cacheKey, { data: weather, timestamp: Date.now() });
-
     return NextResponse.json({ weather });
   } catch (error) {
     console.error('Failed to fetch weather:', error);
-    // Return mock data on error
-    const mockWeather: WeatherData = {
-      temp: 20,
-      feelsLike: 20,
-      condition: 'Clear',
-      description: 'clear sky',
-      icon: '01d',
-      humidity: 50,
-      windSpeed: 5,
-    };
-    return NextResponse.json({ weather: mockWeather, fallback: true });
+    // Never invent weather: let the UI hide the widget instead
+    return NextResponse.json({ error: 'Weather unavailable' }, { status: 502 });
   }
 }

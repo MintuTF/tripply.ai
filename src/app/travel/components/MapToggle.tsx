@@ -11,7 +11,7 @@ interface MapToggleProps {
 
 export function MapToggle({ isActive, onToggle }: MapToggleProps) {
   return (
-    <motion.button
+    <motion.button aria-label="Toggle map view"
       onClick={onToggle}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}

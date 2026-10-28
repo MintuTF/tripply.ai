@@ -126,7 +126,19 @@ export function EnhancedProductCard({
       aria-label={`Product: ${product.name}`}
     >
       {/* Product Image with Smart Badges */}
-      <div className="relative aspect-square bg-white overflow-hidden">
+      <div
+        className="relative aspect-[4/3] bg-white overflow-hidden cursor-pointer"
+        role="button"
+        tabIndex={0}
+        aria-label={`View details for ${product.name}`}
+        onClick={handleViewDetails}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleViewDetails(e as unknown as React.MouseEvent);
+          }
+        }}
+      >
         {/* Image */}
         {!imageError ? (
           <img
@@ -163,7 +175,13 @@ export function EnhancedProductCard({
       <div className="p-4 space-y-3">
         {/* Name */}
         <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2 min-h-[2.5rem]">
-          {product.name}
+          <button
+            type="button"
+            onClick={handleViewDetails}
+            className="text-left hover:text-purple-700 transition-colors marketplace-focus-visible"
+          >
+            {product.name}
+          </button>
         </h3>
 
         {/* Rating & Reviews */}
@@ -288,15 +306,21 @@ export function EnhancedProductCard({
             </AnimatePresence>
           </button>
 
-          {/* View Details (Secondary) */}
-          <button
-            onClick={handleViewDetails}
-            className="flex-shrink-0 p-2.5 rounded-xl border border-gray-200 hover:border-purple-300 hover:bg-purple-50 text-gray-600 hover:text-purple-700 transition-all marketplace-focus-visible"
-            aria-label={`View details for ${product.name}`}
-            title="View details"
+          {/* Buy link: a real link so it can be opened in a new tab, copied, or middle-clicked */}
+          <a
+            href={product.affiliateUrl}
+            target="_blank"
+            rel="sponsored nofollow noopener noreferrer"
+            onClick={(e) => {
+              e.stopPropagation();
+              trackAffiliateClick(product.id, product.name);
+            }}
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-gray-200 hover:border-purple-300 hover:bg-purple-50 text-sm font-medium text-gray-700 hover:text-purple-700 transition-all marketplace-focus-visible"
+            aria-label={`View ${product.name} on Amazon (opens in a new tab)`}
           >
+            <span>Amazon</span>
             <ExternalLink className="w-4 h-4" aria-hidden="true" />
-          </button>
+          </a>
         </div>
       </div>
     </motion.div>

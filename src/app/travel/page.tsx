@@ -29,6 +29,17 @@ function TravelPageContent() {
       return;
     }
 
+    // Explicit "new search": forget the last city and show the search page
+    if (searchParams.get('new')) {
+      try {
+        localStorage.removeItem('voyagr_last_city_slug');
+      } catch {
+        // localStorage unavailable
+      }
+      setCheckingLastCity(false);
+      return;
+    }
+
     // Check for last visited city in localStorage and auto-redirect
     if (typeof window !== 'undefined') {
       const lastCitySlug = localStorage.getItem('voyagr_last_city_slug');

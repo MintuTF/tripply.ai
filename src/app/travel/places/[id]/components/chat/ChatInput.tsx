@@ -61,7 +61,7 @@ export function ChatInput({
           rows={1}
           className="flex-1 resize-none bg-transparent text-sm text-gray-800 placeholder-gray-400 focus:outline-none disabled:opacity-50 min-h-[24px] max-h-[120px]"
         />
-        <button
+        <button aria-label="Send message"
           type="submit"
           disabled={!input.trim() || isLoading}
           className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center justify-center hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"

@@ -114,6 +114,8 @@ export function ChatHistoryProvider({
   // Guest mode state
   const [guestConversations, setGuestConversations] = useState<GuestConversation[]>([]);
   const [guestMessages, setGuestMessages] = useState<GuestMessage[]>([]);
+  const guestConversationsRef = useRef<GuestConversation[]>([]);
+  const guestMessagesRef = useRef<GuestMessage[]>([]);
   const isGuest = !userId;
 
   // Track if we've attempted to restore from localStorage
@@ -129,6 +131,11 @@ export function ChatHistoryProvider({
   const allConversations = isGuest
     ? guestConversations
     : conversations;
+
+  useEffect(() => {
+    guestConversationsRef.current = guestConversations;
+    guestMessagesRef.current = guestMessages;
+  }, [guestConversations, guestMessages]);
 
   // Load guest data on mount
   useEffect(() => {
@@ -374,19 +381,20 @@ export function ChatHistoryProvider({
 
   // ==================== GUEST MODE FUNCTIONS ====================
 
-  // Add message in guest mode (localStorage)
+  // Add message in guest mode (localStorage).
+  // Reads current data from refs: this is called from async streaming code whose closure is stale,
+  // and side effects must not live inside state updaters (they run twice in dev).
   const addGuestMessage = useCallback((message: { role: 'user' | 'assistant'; text: string; chat_mode: ChatMode }) => {
     if (!initialDestination) return;
 
     const now = new Date().toISOString();
     const messageId = generateUUID();
 
-    // Check if we have a conversation for this destination
-    let conversationId = guestConversations.find(
+    let convs = guestConversationsRef.current;
+    let conversationId = convs.find(
       c => c.destination.toLowerCase() === initialDestination.toLowerCase()
     )?.id;
 
-    // Create new conversation if needed
     if (!conversationId) {
       conversationId = generateUUID();
       const newConversation: GuestConversation = {
@@ -398,15 +406,10 @@ export function ChatHistoryProvider({
         updated_at: now,
         messageCount: 0,
       };
-      setGuestConversations(prev => {
-        const updated = [newConversation, ...prev];
-        saveGuestDataToStorage(updated, guestMessages);
-        return updated;
-      });
+      convs = [newConversation, ...convs];
       setCurrentConversationId(conversationId);
     }
 
-    // Create message
     const newMessage: GuestMessage = {
       id: messageId,
       conversationId,
@@ -415,20 +418,25 @@ export function ChatHistoryProvider({
       chat_mode: message.chat_mode,
       created_at: now,
     };
+    const msgs = [...guestMessagesRef.current, newMessage];
 
-    // Update state and localStorage
-    setGuestMessages(prev => {
-      const updated = [...prev, newMessage];
-      const convs = guestConversations.map(c =>
-        c.id === conversationId
-          ? { ...c, messageCount: updated.filter(m => m.conversationId === c.id).length, updated_at: now }
-          : c
-      );
-      saveGuestDataToStorage(convs, updated);
-      return updated;
-    });
+    convs = convs.map(c =>
+      c.id === conversationId
+        ? {
+            ...c,
+            messageCount: msgs.filter(m => m.conversationId === c.id).length,
+            updated_at: now,
+            ...(message.role === 'user' ? { title: message.text.slice(0, 50) } : {}),
+          }
+        : c
+    );
 
-    // Update current messages for display
+    guestConversationsRef.current = convs;
+    guestMessagesRef.current = msgs;
+    setGuestConversations(convs);
+    setGuestMessages(msgs);
+    saveGuestDataToStorage(convs, msgs);
+
     setCurrentMessages(prev => [...prev, {
       id: messageId,
       trip_id: null,
@@ -437,20 +445,7 @@ export function ChatHistoryProvider({
       chat_mode: message.chat_mode,
       created_at: now,
     }]);
-
-    // Update conversation title if user message
-    if (message.role === 'user') {
-      setGuestConversations(prev => {
-        const updated = prev.map(c =>
-          c.id === conversationId
-            ? { ...c, title: message.text.slice(0, 50), updated_at: now }
-            : c
-        );
-        saveGuestDataToStorage(updated, guestMessages);
-        return updated;
-      });
-    }
-  }, [initialDestination, guestConversations, guestMessages]);
+  }, [initialDestination]);
 
   // Delete guest conversation
   const deleteGuestConversation = useCallback((id: string) => {

@@ -192,7 +192,7 @@ export const DISCOVER_DESTINATIONS: DiscoverDestination[] = [
     name: 'Marrakech',
     country: 'Morocco',
     region: 'africa',
-    image: 'https://images.unsplash.com/photo-1597212720452-27547a715007?w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1597212618440-806262de4f6b?w=800&q=80',
     rating: 4.6,
     tags: ['Culture', 'Markets', 'History'],
     description: 'Ancient medinas, vibrant souks, and stunning riads in the heart of Morocco.',

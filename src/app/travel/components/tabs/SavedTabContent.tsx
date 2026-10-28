@@ -156,7 +156,7 @@ export function SavedTabContent({ onOpenItinerary }: SavedTabContentProps) {
               >
                 <div className="relative h-40 bg-gradient-to-br from-purple-100 to-pink-100">
                   {place.imageUrl ? (
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={place.imageUrl}
                       alt={place.name}
                       className="w-full h-full object-cover"

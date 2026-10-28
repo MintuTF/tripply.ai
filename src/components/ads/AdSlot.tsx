@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AdSlotProps } from '@/lib/adsense/types';
 import { cn } from '@/lib/utils';
+import { isAdSenseEnabled } from '@/lib/adsense/config';
 import {
   trackAdImpression,
   trackAdViewability,
@@ -205,6 +206,11 @@ export function AdSlot({
   // For new accounts, show placeholder instead of hiding completely
   // This helps with testing and layout verification
   const showPlaceholder = hasError && process.env.NODE_ENV === 'development';
+
+  // Render nothing (no empty "Advertisement" box) unless AdSense is configured
+  if (!isAdSenseEnabled()) {
+    return null;
+  }
 
   // Hide completely in production if error, show placeholder in dev
   if (hasError && !showPlaceholder) {

@@ -41,9 +41,13 @@ export function AIAssistantSection({
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when new messages arrive
+  // Scroll only when a new message is added (not on mount, which would jump the page to the chat)
+  const prevMessageCount = useRef(session.messages.length);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (session.messages.length > prevMessageCount.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    prevMessageCount.current = session.messages.length;
   }, [session.messages]);
 
   const handleSendMessage = async (message: string) => {

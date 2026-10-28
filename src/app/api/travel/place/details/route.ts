@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { TravelPlace } from '@/lib/travel/types';
+import { placePhotoUrl } from '@/lib/places/photo';
 
 // In-memory cache for details data
 const detailsCache = new Map<string, { data: any; timestamp: number }>();
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
     // Check cache
     const cached = detailsCache.get(placeId);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return NextResponse.json(cached.data);
+      return NextResponse.json(cached.data, { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } });
     }
 
     // Try to get place from global storage
@@ -123,7 +124,7 @@ export async function GET(request: NextRequest) {
                 categories: result.types || [],
                 description: result.editorial_summary?.overview || `Explore ${result.name} - a popular destination.`,
                 imageUrl: result.photos?.[0]
-                  ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${result.photos[0].photo_reference}&key=${googleApiKey}`
+                  ? placePhotoUrl(result.photos[0].photo_reference, 800)
                   : undefined,
                 priceLevel: result.price_level,
                 website: result.website,
@@ -219,7 +220,7 @@ export async function GET(request: NextRequest) {
       timestamp: Date.now(),
     });
 
-    return NextResponse.json(detailsData);
+    return NextResponse.json(detailsData, { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } });
   } catch (error) {
     console.error('Details API error:', error);
     return NextResponse.json(

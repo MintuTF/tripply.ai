@@ -1,5 +1,6 @@
 import { checkRateLimit, getClientIP, createRateLimitHeaders } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
+import { placePhotoUrl } from '@/lib/places/photo';
 
 const PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
@@ -129,7 +130,7 @@ export async function GET(request: NextRequest) {
       // Build photo URLs if available
       const photos = place.photos?.slice(0, 3).map((photo: any) => {
         const photoReference = photo.photo_reference;
-        return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photoReference}&key=${PLACES_API_KEY}`;
+        return placePhotoUrl(photoReference, 800);
       }) || [];
 
       return {

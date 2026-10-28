@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { AdSlot } from './AdSlot';
+import { isAdSenseEnabled } from '@/lib/adsense/config';
 import type { AdSlotProps } from '@/lib/adsense/types';
 import { trackAdRefresh, adPerformanceTracker } from '@/lib/adsense/analytics';
 
@@ -175,6 +176,8 @@ export function AdSlotAutoRefresh({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [enableAutoRefresh]);
+
+  if (!isAdSenseEnabled()) return null;
 
   return (
     <div ref={adRef}>

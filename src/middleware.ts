@@ -97,7 +97,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Apply rate limiting to API routes
-  if (request.nextUrl.pathname.startsWith('/api/')) {
+  // Photo redirects are CDN-cached and fired in bursts (one per card), so they're exempt from the per-IP limiter
+  if (request.nextUrl.pathname.startsWith('/api/') && request.nextUrl.pathname !== '/api/places/photo') {
     const key = getRateLimitKey(request);
     const { allowed, remaining } = checkRateLimit(key);
 

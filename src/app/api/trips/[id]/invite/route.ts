@@ -69,21 +69,21 @@ export async function POST(
 
     // Send email invitation using Resend
     if (process.env.RESEND_API_KEY) {
-      const fromEmail = process.env.EMAIL_FROM || 'Voyagr <onboarding@resend.dev>';
+      const fromEmail = process.env.EMAIL_FROM || 'Tripply <onboarding@resend.dev>';
 
       try {
         const { data: emailData, error: emailError } = await resend.emails.send({
           from: fromEmail,
           to: email,
-          subject: `You're invited to view "${trip.title}" on Voyagr`,
+          subject: `You're invited to view "${trip.title}" on Tripply`,
           html: getInvitationEmailHtml({
-            inviterEmail: user.email || 'A Voyagr user',
+            inviterEmail: user.email || 'A Tripply user',
             tripTitle: trip.title,
             role,
             inviteUrl,
           }),
           text: getInvitationEmailText({
-            inviterEmail: user.email || 'A Voyagr user',
+            inviterEmail: user.email || 'A Tripply user',
             tripTitle: trip.title,
             role,
             inviteUrl,

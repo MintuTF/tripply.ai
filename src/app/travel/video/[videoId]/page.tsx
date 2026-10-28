@@ -3,13 +3,14 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeft, MapPin, Search } from 'lucide-react';
+import { ArrowLeft, MapPin } from 'lucide-react';
 
-import { VideoPlayer, VideoSummary, RelatedVideosList } from '@/components/video';
+import { VideoPlayer, VideoPlacesPanel, VideoOverviewCard, VideoGoodToKnowCard, RelatedVideosList } from '@/components/video';
 import { AdSlot } from '@/components/ads/AdSlot';
 import { AD_SLOTS } from '@/lib/adsense/config';
-import type { VideoDetails, VideoPageAnalysis } from '@/lib/video/types';
+import type { VideoDetails } from '@/lib/video/types';
 import type { YouTubeVideo } from '@/types/video';
+import { useVideoInsights } from '@/hooks/useVideoInsights';
 
 interface VideoPageProps {
   params: Promise<{ videoId: string }>;
@@ -22,12 +23,10 @@ export default function VideoPage({ params }: VideoPageProps) {
   const city = searchParams.get('city') || '';
 
   const [videoDetails, setVideoDetails] = useState<VideoDetails | null>(null);
-  const [analysis, setAnalysis] = useState<VideoPageAnalysis | null>(null);
   const [relatedVideos, setRelatedVideos] = useState<YouTubeVideo[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
-  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(true);
   const [isLoadingRelated, setIsLoadingRelated] = useState(true);
-  const [addedPlaces, setAddedPlaces] = useState<string[]>([]);
+  const [seekRequest, setSeekRequest] = useState<{ sec: number; nonce: number } | null>(null);
 
   // Fetch video details
   useEffect(() => {
@@ -48,56 +47,13 @@ export default function VideoPage({ params }: VideoPageProps) {
     fetchDetails();
   }, [videoId]);
 
-  // Fetch video analysis (AI summary)
-  useEffect(() => {
-    const fetchAnalysis = async () => {
-      if (!videoDetails) return;
-
-      try {
-        const response = await fetch('/api/travel/ai/respond', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'videoAnalysis',
-            videoId,
-            videoTitle: videoDetails.title,
-            videoDescription: videoDetails.description,
-            city,
-          }),
-        });
-
-        const data = await response.json();
-        if (data.analysis) {
-          setAnalysis(data.analysis);
-        } else {
-          setAnalysis({
-            summary: `This video explores ${city || 'travel destinations'} and showcases various points of interest. ${videoDetails.description.slice(0, 200)}...`,
-            places: [],
-            highlights: [
-              'Discover local attractions and hidden gems',
-              'Get insider tips from experienced travelers',
-              'Experience the culture through stunning visuals',
-            ],
-            analyzedAt: Date.now(),
-          });
-        }
-      } catch (error) {
-        console.error('Failed to fetch analysis:', error);
-        setAnalysis({
-          summary: videoDetails?.description?.slice(0, 300) || 'Explore this travel destination.',
-          places: [],
-          highlights: [],
-          analyzedAt: Date.now(),
-        });
-      } finally {
-        setIsLoadingAnalysis(false);
-      }
-    };
-
-    if (videoDetails) {
-      fetchAnalysis();
-    }
-  }, [videoDetails, videoId, city]);
+  // Read the video itself (captions): summary, key points, tips and the places it names
+  const { result: insights, status: insightsStatus, retry: retryInsights } = useVideoInsights({
+    videoId,
+    title: videoDetails?.title,
+    description: videoDetails?.description,
+    city,
+  });
 
   // Fetch related videos
   useEffect(() => {
@@ -127,13 +83,6 @@ export default function VideoPage({ params }: VideoPageProps) {
       fetchRelated();
     }
   }, [videoId, videoDetails, city]);
-
-  const handleAddPlace = (placeName: string, placeType: string) => {
-    if (!addedPlaces.includes(placeName)) {
-      setAddedPlaces([...addedPlaces, placeName]);
-      console.log(`Adding place: ${placeName} (${placeType})`);
-    }
-  };
 
   const handleBack = () => {
     router.back();
@@ -185,16 +134,15 @@ export default function VideoPage({ params }: VideoPageProps) {
           className="flex flex-col lg:flex-row gap-6 items-start"
         >
           {/* Left Column - Video Player (60%) */}
-          <div className="w-full lg:w-[60%] xl:w-[65%]">
+          <div className="w-full lg:w-[60%] xl:w-[65%] lg:sticky lg:top-20 lg:self-start">
             {/* Video Player with Purple Glow */}
             <div className="relative">
               <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-3xl blur-lg opacity-30" />
               <div className="relative ring-2 ring-purple-400/60 shadow-2xl shadow-purple-500/30 rounded-2xl overflow-hidden">
                 <VideoPlayer
                   videoId={videoId}
-                  title={videoDetails?.title}
-                  channelTitle={videoDetails?.channelTitle}
                   durationSeconds={videoDetails?.durationSeconds}
+                  seekRequest={seekRequest}
                   className=""
                 />
               </div>
@@ -208,13 +156,27 @@ export default function VideoPage({ params }: VideoPageProps) {
             transition={{ delay: 0.1 }}
             className="w-full lg:w-[40%] xl:w-[35%] space-y-6"
           >
-            <VideoSummary
-              analysis={analysis}
-              isLoading={isLoadingAnalysis}
-              onAddPlace={handleAddPlace}
-              addedPlaces={addedPlaces}
-              variant="card"
-            />
+            {(() => {
+              const seek = (sec: number) => setSeekRequest({ sec, nonce: Date.now() });
+              return (
+                <>
+                  <VideoOverviewCard result={insights} status={insightsStatus} onSeek={seek} />
+                  {videoDetails && (
+                    <VideoPlacesPanel
+                      videoId={videoId}
+                      title={videoDetails.title}
+                      channel={videoDetails.channelTitle}
+                      city={city}
+                      result={insights}
+                      status={insightsStatus}
+                      onRetry={retryInsights}
+                      onSeek={seek}
+                    />
+                  )}
+                  <VideoGoodToKnowCard result={insights} status={insightsStatus} onSeek={seek} />
+                </>
+              );
+            })()}
 
             {/* Sticky Sidebar Ad - Desktop only */}
             <div className="hidden lg:block sticky top-24">
@@ -258,19 +220,6 @@ export default function VideoPage({ params }: VideoPageProps) {
           />
         </motion.section>
       </main>
-
-      {/* Floating Find Place Button */}
-      <motion.button
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.4 }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className="fixed bottom-6 right-6 flex items-center gap-2 px-5 py-3 bg-white dark:bg-gray-800 rounded-full shadow-lg shadow-purple-500/20 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 font-medium hover:shadow-xl hover:shadow-purple-500/30 transition-all z-40"
-      >
-        <Search className="w-4 h-4" />
-        <span>Find Place</span>
-      </motion.button>
     </div>
   );
 }

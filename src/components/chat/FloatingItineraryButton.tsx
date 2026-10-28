@@ -66,7 +66,7 @@ export function FloatingItineraryButtonMinimal({
   }
 
   return (
-    <motion.button
+    <motion.button aria-label="View itinerary"
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       whileHover={{ scale: 1.1 }}

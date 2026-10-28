@@ -143,7 +143,7 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
               fontWeight: 400,
             }}
           >
-            Made with Voyagr
+            Made with Tripply
           </div>
         </div>
       </AbsoluteFill>

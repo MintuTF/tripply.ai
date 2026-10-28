@@ -9,10 +9,10 @@ interface VideoPlayerProps {
   videoId: string;
   autoplay?: boolean;
   className?: string;
-  title?: string;
-  channelTitle?: string;
   durationSeconds?: number;
   onClose?: () => void;
+  /** Jump to a second and play; a new `nonce` repeats the jump to the same second */
+  seekRequest?: { sec: number; nonce: number } | null;
 }
 
 // Format seconds to MM:SS or HH:MM:SS
@@ -32,10 +32,9 @@ export function VideoPlayer({
   videoId,
   autoplay = true,
   className = '',
-  title,
-  channelTitle,
   durationSeconds = 0,
   onClose,
+  seekRequest,
 }: VideoPlayerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
@@ -46,6 +45,16 @@ export function VideoPlayer({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(durationSeconds);
   const [isSeeking, setIsSeeking] = useState(false);
+
+  // Jump when a place's timestamp is tapped
+  useEffect(() => {
+    if (!seekRequest) return;
+    sendYouTubeCommand(iframeRef.current, 'seekTo', [seekRequest.sec, true]);
+    sendYouTubeCommand(iframeRef.current, 'playVideo');
+    setIsPaused(false);
+    setIsEnded(false);
+    setCurrentTime(seekRequest.sec);
+  }, [seekRequest]);
 
   // Poll for current time via YouTube API
   useEffect(() => {
@@ -161,34 +170,6 @@ export function VideoPlayer({
         animate={{ opacity: showControls || isPaused || isEnded ? 1 : 0 }}
         className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40 pointer-events-none"
       />
-
-      {/* Title Badge - Top Left */}
-      <AnimatePresence>
-        {(title || channelTitle) && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: showControls ? 1 : 0.9, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="absolute top-4 left-4 z-10"
-          >
-            <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-black/50 backdrop-blur-md border border-white/20">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                <Play className="w-4 h-4 text-white fill-white" />
-              </div>
-              <div className="max-w-[90%] md:max-w-[200px]">
-                {title && (
-                  <h3 className="font-semibold text-sm text-white truncate">
-                    {title.length > 25 ? title.slice(0, 25) + '...' : title}
-                  </h3>
-                )}
-                {channelTitle && (
-                  <p className="text-xs text-white/70 truncate">{channelTitle}</p>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Top Right Controls */}
       <motion.div

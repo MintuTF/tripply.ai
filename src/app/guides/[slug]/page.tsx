@@ -19,6 +19,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { getTravelGuide, travelGuides } from '@/data/travel-guides';
+import { Navigation } from '@/components/shared/Navigation';
 
 export default function GuideDetailPage() {
   const params = useParams();
@@ -33,26 +34,7 @@ export default function GuideDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-lg">
-                <Plane className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-foreground">Voyagr</span>
-            </Link>
-            <Link
-              href="/guides"
-              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              All Guides
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Navigation />
 
       {/* Hero */}
       <section className="pt-16">
@@ -400,7 +382,7 @@ export default function GuideDetailPage() {
               Ready to Visit {guide.city}?
             </h2>
             <p className="text-lg text-muted-foreground mb-8">
-              Start planning your trip with Voyagr. Discover places, save favorites, and create your perfect itinerary.
+              Start planning your trip with Tripply. Discover places, save favorites, and create your perfect itinerary.
             </p>
             <Link
               href={`/?destination=${encodeURIComponent(guide.city)}`}
@@ -418,7 +400,7 @@ export default function GuideDetailPage() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} Voyagr. All rights reserved.
+              © {new Date().getFullYear()} Tripply. All rights reserved.
             </p>
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
               <Link href="/blog" className="hover:text-foreground transition-colors">

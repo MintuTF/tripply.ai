@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Email service not configured' });
     }
 
-    const fromEmail = process.env.EMAIL_FROM || 'Voyagr <onboarding@resend.dev>';
+    const fromEmail = process.env.EMAIL_FROM || 'Tripply <onboarding@resend.dev>';
 
     const { data, error } = await resend.emails.send({
       from: fromEmail,

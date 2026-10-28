@@ -278,7 +278,17 @@ export type TravelInfo = {
   next_stop_id: string; // ID of the next card in sequence
 };
 
+/** Where a card came from when it was added from a travel video */
+export type CardSource = {
+  videoId: string;
+  videoTitle: string;
+  channel?: string;
+  /** Moment in the video (seconds) where the place is mentioned */
+  startSec?: number;
+};
+
 export type HotelCard = {
+  source?: CardSource;
   name: string;
   address: string;
   coordinates: { lat: number; lng: number };
@@ -295,6 +305,7 @@ export type HotelCard = {
 };
 
 export type SpotCard = {
+  source?: CardSource;
   name: string;
   address: string;
   coordinates: { lat: number; lng: number };
@@ -309,6 +320,7 @@ export type SpotCard = {
 };
 
 export type FoodCard = {
+  source?: CardSource;
   name: string;
   address: string;
   coordinates: { lat: number; lng: number };
@@ -324,6 +336,7 @@ export type FoodCard = {
 };
 
 export type ActivityCard = {
+  source?: CardSource;
   name: string;
   address?: string;
   coordinates?: { lat: number; lng: number };

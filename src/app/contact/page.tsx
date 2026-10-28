@@ -4,38 +4,46 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Plane, ArrowLeft, Mail, MessageSquare, Send, CheckCircle } from 'lucide-react';
+import { Navigation } from '@/components/shared/Navigation';
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // In a real app, this would send the form data
-    setSubmitted(true);
+    if (sending) return;
+    const form = new FormData(e.currentTarget);
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.get('name'),
+          email: form.get('email'),
+          message: form.get('message'),
+          website: form.get('website'),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || 'Something went wrong. Please try again.');
+        return;
+      }
+      setSubmitted(true);
+    } catch {
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-lg">
-                <Plane className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-foreground">Voyagr</span>
-            </Link>
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Home
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Navigation />
 
       {/* Content */}
       <main className="pt-32 pb-16 px-4">
@@ -110,6 +118,7 @@ export default function ContactPage() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium mb-2">
                       Name
@@ -117,6 +126,9 @@ export default function ContactPage() {
                     <input
                       type="text"
                       id="name"
+                      name="name"
+                      autoComplete="name"
+                      maxLength={100}
                       required
                       className="w-full px-4 py-3 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                       placeholder="Your name"
@@ -129,6 +141,9 @@ export default function ContactPage() {
                     <input
                       type="email"
                       id="email"
+                      name="email"
+                      autoComplete="email"
+                      maxLength={200}
                       required
                       className="w-full px-4 py-3 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                       placeholder="you@example.com"
@@ -140,18 +155,27 @@ export default function ContactPage() {
                     </label>
                     <textarea
                       id="message"
+                      name="message"
                       rows={4}
+                      minLength={5}
+                      maxLength={4000}
                       required
                       className="w-full px-4 py-3 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors resize-none"
                       placeholder="How can we help?"
                     />
                   </div>
+                  {error && (
+                    <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                      {error}
+                    </p>
+                  )}
                   <button
                     type="submit"
-                    className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl font-semibold transition-all hover:scale-[1.02]"
+                    disabled={sending}
+                    className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-semibold transition-all enabled:hover:scale-[1.02]"
                   >
                     <Send className="h-4 w-4" />
-                    Send Message
+                    {sending ? 'Sending...' : 'Send Message'}
                   </button>
                 </form>
               )}
@@ -164,7 +188,7 @@ export default function ContactPage() {
       <footer className="border-t border-border py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Voyagr. All rights reserved.
+            © {new Date().getFullYear()} Tripply. All rights reserved.
           </p>
         </div>
       </footer>

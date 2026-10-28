@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardType } from '@/types';
 import { SortableKanbanCard } from './SortableKanbanCard';
 import { cn } from '@/lib/utils';
-import { Hotel, Utensils, Compass, ChevronDown, Sparkles, Calendar } from 'lucide-react';
+import { Hotel, Utensils, Compass, ChevronDown, Sparkles, Calendar, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   SortableContext,
@@ -121,14 +121,18 @@ export function KanbanColumn({
     return collapsedSections[sectionId] ?? false;
   };
 
-  // Calculate trip days for booked column
-  const tripDayCount = getTripDays(tripDates);
-  const isConfirmedWithDays = column.id === 'confirmed' && tripDayCount > 0;
-
   // Get all cards flat for this column
   const allCards = useMemo(() => {
     return categories.flatMap(cat => cardsByCategory[cat.id] || []);
   }, [categories, cardsByCategory]);
+
+  // Confirmed is always planned per day. With trip dates the number of days follows the dates; without dates
+  // (a draft) it starts at 1, grows to fit the days already used, and the traveler can add more.
+  const [extraDays, setExtraDays] = useState(0);
+  const datedDays = getTripDays(tripDates);
+  const highestDayInUse = allCards.reduce((max, c) => Math.max(max, c.day || 0), 0);
+  const tripDayCount = column.id === 'confirmed' ? Math.max(datedDays || 1, highestDayInUse, extraDays) : 0;
+  const isConfirmedWithDays = column.id === 'confirmed';
 
   // Group cards by day for booked column
   const cardsByDay = useMemo(() => {
@@ -150,21 +154,18 @@ export function KanbanColumn({
       grouped[0][cat.id] = [];
     });
 
-    // Group cards by day and category
-    allCards.forEach(card => {
-      const dayNum = card.day || 0;
-      const catId = card.type;
-
-      if (!grouped[dayNum]) {
-        grouped[dayNum] = {};
-        categories.forEach(cat => {
-          grouped[dayNum][cat.id] = [];
-        });
-      }
-
-      if (grouped[dayNum][catId]) {
-        grouped[dayNum][catId].push(card);
-      }
+    // Group cards by day, under the category they are listed in
+    categories.forEach(cat => {
+      (cardsByCategory[cat.id] || []).forEach(card => {
+        const dayNum = card.day || 0;
+        if (!grouped[dayNum]) {
+          grouped[dayNum] = {};
+          categories.forEach(c => {
+            grouped[dayNum][c.id] = [];
+          });
+        }
+        grouped[dayNum][cat.id].push(card);
+      });
     });
 
     // Sort cards within each day/category by order
@@ -175,7 +176,7 @@ export function KanbanColumn({
     });
 
     return grouped;
-  }, [isConfirmedWithDays, allCards, categories, tripDayCount]);
+  }, [isConfirmedWithDays, cardsByCategory, categories, tripDayCount]);
 
   // Get total count for the column
   const totalCount = allCards.length;
@@ -214,7 +215,8 @@ export function KanbanColumn({
                 'p-1 rounded-md',
                 category.color === 'purple' && 'bg-purple-500/15 text-purple-600',
                 category.color === 'pink' && 'bg-pink-500/15 text-pink-600',
-                category.color === 'violet' && 'bg-violet-500/15 text-violet-600'
+                category.color === 'violet' && 'bg-violet-500/15 text-violet-600',
+                category.color === 'amber' && 'bg-amber-500/15 text-amber-600'
               )}
             >
               <Icon className="h-3 w-3" />
@@ -225,7 +227,8 @@ export function KanbanColumn({
                 'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
                 category.color === 'purple' && 'bg-purple-100 text-purple-700',
                 category.color === 'pink' && 'bg-pink-100 text-pink-700',
-                category.color === 'violet' && 'bg-violet-100 text-violet-700'
+                category.color === 'violet' && 'bg-violet-100 text-violet-700',
+                category.color === 'amber' && 'bg-amber-100 text-amber-700'
               )}
             >
               {categoryCards.length}
@@ -334,6 +337,12 @@ export function KanbanColumn({
           )}
         </button>
 
+        {isEmpty && (
+          <p className="px-3 pb-2.5 text-xs text-gray-400">
+            {isUnscheduled ? 'Confirmed places without a day' : 'Drop a place here'}
+          </p>
+        )}
+
         {/* Day Content - Categories within this day */}
         <AnimatePresence initial={false}>
           {!isCollapsed && !isEmpty && (
@@ -417,6 +426,14 @@ export function KanbanColumn({
               )}
               {/* Render unscheduled (day 0) at the end */}
               {renderDaySection(0, cardsByDay[0] || {})}
+              {!datedDays && (
+                <button
+                  onClick={() => setExtraDays(tripDayCount + 1)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-purple-200 py-2 text-sm font-medium text-purple-600 transition-colors hover:bg-purple-50"
+                >
+                  <Plus className="h-4 w-4" /> Add day
+                </button>
+              )}
             </>
           ) : (
             // Category-grouped view for other columns
@@ -449,7 +466,8 @@ export function KanbanColumn({
                             'p-1.5 rounded-lg',
                             category.color === 'purple' && 'bg-purple-500/15 text-purple-600',
                             category.color === 'pink' && 'bg-pink-500/15 text-pink-600',
-                            category.color === 'violet' && 'bg-violet-500/15 text-violet-600'
+                            category.color === 'violet' && 'bg-violet-500/15 text-violet-600',
+                category.color === 'amber' && 'bg-amber-500/15 text-amber-600'
                           )}
                         >
                           <Icon className="h-3.5 w-3.5" />
@@ -460,7 +478,8 @@ export function KanbanColumn({
                             'rounded-full px-2 py-0.5 text-xs font-semibold',
                             category.color === 'purple' && 'bg-purple-100 text-purple-700',
                             category.color === 'pink' && 'bg-pink-100 text-pink-700',
-                            category.color === 'violet' && 'bg-violet-100 text-violet-700'
+                            category.color === 'violet' && 'bg-violet-100 text-violet-700',
+                category.color === 'amber' && 'bg-amber-100 text-amber-700'
                           )}
                         >
                           {categoryCards.length}
@@ -513,7 +532,7 @@ export function KanbanColumn({
           )}
 
           {/* Empty state for column */}
-          {totalCount === 0 && (
+          {totalCount === 0 && !isConfirmedWithDays && (
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <p className="text-sm text-purple-400">No items yet</p>

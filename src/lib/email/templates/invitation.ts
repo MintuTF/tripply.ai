@@ -33,7 +33,7 @@ export function getInvitationEmailHtml(params: InvitationEmailParams): string {
           <!-- Header with gradient -->
           <tr>
             <td style="padding: 48px 48px 32px; text-align: center; background: linear-gradient(135deg, #7C3AED 0%, #EC4899 100%); border-radius: 16px 16px 0 0;">
-              <h1 style="margin: 0; font-size: 32px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">Voyagr</h1>
+              <h1 style="margin: 0; font-size: 32px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">Tripply</h1>
               <p style="margin: 8px 0 0; font-size: 14px; color: rgba(255,255,255,0.9);">Trip Invitation</p>
             </td>
           </tr>
@@ -109,7 +109,7 @@ export function getInvitationEmailHtml(params: InvitationEmailParams): string {
                 This invitation was sent by ${inviterEmail}
               </p>
               <p style="margin: 0; font-size: 12px; line-height: 18px; color: #94a3b8; text-align: center;">
-                &copy; 2024 Voyagr. All rights reserved.
+                &copy; 2024 Tripply. All rights reserved.
               </p>
             </td>
           </tr>
@@ -142,6 +142,6 @@ View the trip here: ${inviteUrl}
 
 ---
 This invitation was sent by ${inviterEmail}
-© 2024 Voyagr. All rights reserved.
+© 2024 Tripply. All rights reserved.
   `.trim();
 }

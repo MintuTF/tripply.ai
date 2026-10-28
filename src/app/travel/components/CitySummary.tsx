@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { MapPin, Sun, Calendar, DollarSign, ChevronLeft, Cloud, Loader2 } from 'lucide-react';
 import { useTravel } from '../context/TravelContext';
@@ -19,6 +20,7 @@ interface WeatherData {
 
 export function CitySummary() {
   const { state, dispatch } = useTravel();
+  const router = useRouter();
   const { city } = state;
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -53,6 +55,7 @@ export function CitySummary() {
 
   const handleBack = () => {
     dispatch({ type: 'RESET' });
+    router.push('/travel?new=1');
   };
 
   // Get metadata

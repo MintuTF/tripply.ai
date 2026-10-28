@@ -116,6 +116,10 @@ const EXCLUDED_TYPES = new Set([
   'university',
 ]);
 
+const PLACE_SEARCH_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const placeSearchCache = new Map<string, { result: ToolResult<PlaceResult[]>; at: number }>();
+const geocodeCache = new Map<string, { coords: { lat: number; lng: number }; at: number }>();
+
 /**
  * Search for places using Google Places API
  */
@@ -138,20 +142,40 @@ export async function searchPlaces(params: {
   try {
     const { query, location, type = 'all', radius = 5000, price_level, min_rating } = params;
 
-    // First, geocode the location to get coordinates
-    const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${PLACES_API_KEY}`;
-    const geocodeResponse = await fetch(geocodeUrl);
-    const geocodeData = await geocodeResponse.json();
-
-    if (geocodeData.status !== 'OK' || !geocodeData.results[0]) {
-      return {
-        success: false,
-        error: `Could not geocode location: ${location}`,
-        timestamp: new Date().toISOString(),
-      };
+    // Identical searches (same city, same question) are common: answer them from memory for a few hours
+    const searchCacheKey = JSON.stringify([
+      query.trim().toLowerCase(),
+      location.trim().toLowerCase(),
+      type,
+      radius,
+      price_level || null,
+      min_rating || null,
+    ]);
+    const cachedSearch = placeSearchCache.get(searchCacheKey);
+    if (cachedSearch && Date.now() - cachedSearch.at < PLACE_SEARCH_CACHE_TTL_MS) {
+      console.log(`[Places] Search cache hit: "${query}" in ${location}`);
+      return cachedSearch.result;
     }
 
-    const locationCoords = geocodeData.results[0].geometry.location;
+    // First, geocode the location to get coordinates (cached: a city's coordinates don't change)
+    const locationKey = location.trim().toLowerCase();
+    let locationCoords: { lat: number; lng: number } | undefined = geocodeCache.get(locationKey)?.coords;
+    if (!locationCoords) {
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${PLACES_API_KEY}`;
+      const geocodeResponse = await fetch(geocodeUrl);
+      const geocodeData = await geocodeResponse.json();
+
+      if (geocodeData.status !== 'OK' || !geocodeData.results[0]) {
+        return {
+          success: false,
+          error: `Could not geocode location: ${location}`,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      locationCoords = geocodeData.results[0].geometry.location as { lat: number; lng: number };
+      geocodeCache.set(locationKey, { coords: locationCoords, at: Date.now() });
+    }
 
     // Build Places search request
     // For "all" type, search for travel-relevant things instead of everything
@@ -183,26 +207,10 @@ export async function searchPlaces(params: {
       };
     }
 
-    // Collect all results (first page)
-    let allResults = searchData.results || [];
-    console.log(`[Places] First page: ${allResults.length} results, next_page_token: ${!!searchData.next_page_token}`);
-
-    // Fetch second page if available (to get up to 40 results)
-    if (searchData.next_page_token) {
-      // Google requires a short delay before using next_page_token
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const nextPageUrl = `${PLACES_BASE_URL}/textsearch/json?pagetoken=${searchData.next_page_token}&key=${PLACES_API_KEY}`;
-      const nextPageResponse = await fetch(nextPageUrl);
-      const nextPageData = await nextPageResponse.json();
-
-      console.log(`[Places] Second page status: ${nextPageData.status}, results: ${nextPageData.results?.length || 0}`);
-
-      if (nextPageData.status === 'OK' && nextPageData.results) {
-        allResults = [...allResults, ...nextPageData.results];
-      }
-    }
-    console.log(`[Places] Total results after pagination: ${allResults.length}`);
+    // First page only (up to 20 results): chat shows a handful of cards, and a second page doubles the
+    // Text Search cost and adds Google's mandatory 2s wait before the page token works
+    const allResults = searchData.results || [];
+    console.log(`[Places] Text Search: ${allResults.length} results (~$0.032)`);
 
     // Parse and filter results
     let places: PlaceResult[] = (allResults).map((place: any) => ({
@@ -251,7 +259,7 @@ export async function searchPlaces(params: {
     // Limit to top 40 results (map shows all, list shows 20 initially with "See More")
     places = places.slice(0, 40);
 
-    return {
+    const result: ToolResult<PlaceResult[]> = {
       success: true,
       data: places,
       sources: [
@@ -265,6 +273,13 @@ export async function searchPlaces(params: {
       ],
       timestamp: new Date().toISOString(),
     };
+
+    if (placeSearchCache.size >= 200) {
+      const oldest = placeSearchCache.keys().next().value;
+      if (oldest !== undefined) placeSearchCache.delete(oldest);
+    }
+    placeSearchCache.set(searchCacheKey, { result, at: Date.now() });
+    return result;
   } catch (error) {
     console.error('Places search error:', error);
     return {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { TravelPlace } from '@/lib/travel/types';
+import { placePhotoUrl } from '@/lib/places/photo';
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
     // Build photo URL
     let imageUrl: string | undefined;
     if (details.photos && details.photos.length > 0) {
-      imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${details.photos[0].photo_reference}&key=${GOOGLE_PLACES_API_KEY}`;
+      imageUrl = placePhotoUrl(details.photos[0].photo_reference, 800);
     }
 
     // Convert to TravelPlace format

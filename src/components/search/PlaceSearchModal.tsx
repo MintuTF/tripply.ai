@@ -57,6 +57,19 @@ function getPriceLevel(level?: number): string {
   return '$'.repeat(level);
 }
 
+// "Monday: 10 AM - 12 AM, Tuesday: ..." -> ["Daily: 10 AM - 12 AM"] or one line per day when they differ
+function formatOpeningHours(raw: string): string[] {
+  const days = raw.split(/,\s*(?=(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday):)/i).map((d) => d.trim()).filter(Boolean);
+  const parsed = days.map((d) => {
+    const i = d.indexOf(':');
+    return { day: d.slice(0, i), hours: d.slice(i + 1).trim() };
+  });
+  if (parsed.length === 7 && parsed.every((p) => p.hours === parsed[0].hours)) {
+    return [`Daily: ${parsed[0].hours}`];
+  }
+  return days;
+}
+
 export function PlaceSearchModal({
   isOpen,
   onClose,
@@ -227,9 +240,13 @@ export function PlaceSearchModal({
                         </span>
                       )}
                       {selectedPlace.opening_hours && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>{selectedPlace.opening_hours}</span>
+                        <div className="flex items-start gap-1.5 basis-full">
+                          <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          <ul className="space-y-0.5">
+                            {formatOpeningHours(selectedPlace.opening_hours).map((line) => (
+                              <li key={line}>{line}</li>
+                            ))}
+                          </ul>
                         </div>
                       )}
                     </div>
